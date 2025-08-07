@@ -1,0 +1,18 @@
+# Composer dependencies
+/vendor/
+/composer.phar
+
+# Log and cache files
+/fuel/app/logs/
+/fuel/app/cache/
+/fuel/app/tmp/
+*.log
+
+# FuelPHP vendor directories
+/fuel/core/vendor/
+/fuel/vendor/
+/docs/vendor/
+
+# OS generated files
+.DS_Store
+*~
