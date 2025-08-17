@@ -1,29 +1,41 @@
-version: "3.8"
-
 services:
   app:
     build:
-      context: ../
+      context: ..
       dockerfile: docker/Dockerfile
     container_name: fuelphp-app
     ports:
-      - "80:80"
+      - "8080:80"
     volumes:
-      - ../:/var/www/html/my_fuel_project
+      - ..:/var/www/html/my_fuel_project
+    depends_on:
+      - db
     networks:
       - fuelphp-network
+    environment:
+      - FUEL_ENV=development
+      - DB_HOST=db
+      - DB_USER=fuelphp
+      - DB_PASSWORD=fuelphp
+      - DB_NAME=fuelphp
 
   db:
-    build:
-      context: ../
-      dockerfile: docker/db/Dockerfile
+    image: mysql:8.0
+    container_name: fuelphp-db
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: fuelphp
+      MYSQL_USER: fuelphp
+      MYSQL_PASSWORD: fuelphp
     ports:
       - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
     networks:
       - fuelphp-network
+
+volumes:
+  mysql_data:
 
 networks:
   fuelphp-network:
