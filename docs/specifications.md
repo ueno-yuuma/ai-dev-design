@@ -87,7 +87,7 @@
 - FuelPHP フレームワーク
 - REST API による通信
 - JSON形式でのデータ交換
-- Cloudflare D1 データベース（SQLite互換）
+- SQLite データベース
 - Google OAuth 認証
 
 ### AI機能
@@ -120,59 +120,154 @@
 
 ---
 
-## データベース設計（Cloudflare D1）
+## データベース設計（SQLite）
 
-### chartテーブル
+### userテーブル
+ユーザーの基本情報を管理
+
+| カラム名 | データ型 | NULL | デフォルト | 備考 |
+|----------|----------|------|------------|------|
+| id | TEXT | NO | - | ユーザーID（主キー、UUID） |
+| google_user_id | TEXT | NO | - | Google OAuth ID（一意） |
+| email | TEXT | YES | - | メールアドレス |
+| name | TEXT | YES | - | ユーザー名 |
+| created_at | TEXT | YES | CURRENT_TIMESTAMP | 作成日時 |
+
+### chartsテーブル
 フローチャートの基本情報を管理
 
 | カラム名 | データ型 | NULL | デフォルト | 備考 |
 |----------|----------|------|------------|------|
-| id | INTEGER | NO | - | チャートのID（主キー、自動増分） |
-| title | TEXT | YES | NULL | チャートの名前、文字列 |
-| google_user_id | TEXT | NO | - | 作成者のGoogle OAuth ID |
-| content | TEXT | YES | NULL | Mermaid図のコード |
-| updated_at | TEXT | YES | NULL | 最終更新日（ISO8601形式） |
+| id | TEXT | NO | - | チャートID（主キー、UUID） |
+| user_id | TEXT | NO | - | ユーザーID（外部キー、UUID） |
+| title | TEXT | YES | - | チャートタイトル |
+| content | TEXT | YES | - | Mermaidコード |
+| created_at | TEXT | YES | CURRENT_TIMESTAMP | 作成日時 |
+| updated_at | TEXT | YES | - | 最終更新日時 |
 
-### D1データベース特徴
-- **SQLite互換**: Cloudflare D1はSQLiteベースのサーバーレスデータベース
-- **エッジ配信**: 世界中のCloudflareエッジロケーションで実行
-- **自動スケーリング**: サーバーレス環境での自動スケーリング
-- **低レイテンシ**: エッジでの高速データアクセス
+### SQLiteデータベース特徴
+- **軽量**: ファイルベースのデータベース
+- **高速**: 小〜中規模データに最適化
+- **組み込み型**: サーバー不要、アプリケーションに組み込み
+- **ACID準拠**: トランザクション機能完備
+- **クロスプラットフォーム**: 多様な環境で動作
 
 ### テーブル設計方針
 - **認証方式**: Google OAuth による認証
 - **データ形式**: Mermaid形式のテキストデータをcontentカラムに保存
-- **ユーザー管理**: google_user_idでユーザーを識別
+- **ユーザー管理**: usersテーブルで管理、1:n関係でchartsと関連付け
 - **チャート管理**: titleでチャート名を管理
 - **日時管理**: ISO8601形式でタイムスタンプを記録
 
-### SQL例（D1用）
+### SQL例（SQLite用）
 ```sql
-CREATE TABLE chart (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT,
-    google_user_id TEXT NOT NULL,
-    content TEXT,
-    updated_at TEXT,
+-- usersテーブル
+CREATE TABLE users (
+    id TEXT PRIMARY KEY,
+    google_user_id TEXT NOT NULL UNIQUE,
+    email TEXT,
+    name TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_google_user_id ON chart(google_user_id);
-CREATE INDEX idx_updated_at ON chart(updated_at);
+-- chartsテーブル
+CREATE TABLE charts (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    title TEXT,
+    content TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- インデックス（パフォーマンス最適化）
+CREATE INDEX idx_users_google_user_id ON users(google_user_id);
+CREATE INDEX idx_charts_user_id ON charts(user_id);
+CREATE INDEX idx_charts_created_at ON charts(created_at);
+CREATE INDEX idx_charts_updated_at ON charts(updated_at);
+CREATE INDEX idx_charts_title ON charts(title);
+CREATE INDEX idx_charts_user_created ON charts(user_id, created_at);
 ```
 
-### D1接続設定
-```javascript
-// Cloudflare Workers環境での接続例
-export default {
-  async fetch(request, env) {
-    const db = env.DB; // D1データベースバインディング
-    // クエリ実行例
-    const result = await db.prepare(
-      "SELECT * FROM chart WHERE google_user_id = ?"
-    ).bind(userId).all();
-  }
+### データベース接続設定
+```php
+// FuelPHP PDO接続例
+'default' => array(
+    'type'        => 'pdo',
+    'connection'  => array(
+        'dsn'        => 'sqlite:' . APPPATH . 'database/test.db',
+        'username'   => '',
+        'password'   => '',
+        'persistent' => false,
+    ),
+    'identifier'   => '"',
+    'table_prefix' => '',
+    'charset'      => 'utf8',
+    'enable_cache' => true,
+    'profiling'    => false,
+)
+```
+
+### 実装の簡素化について
+データベースにSQLiteを採用した理由：
+- **開発環境の簡素化**: サーバー不要でファイルベースの軽量データベース
+- **設定の簡単さ**: 複雑な外部サービス設定が不要
+- **デバッグの容易さ**: ローカルファイルでのデータ確認が可能
+- **移植性**: プロジェクト全体を簡単に移動・共有可能
+
+### UUID生成・管理
+- **UUID形式**: UUID v4（ランダム生成）
+- **生成方法**: PHPの`random_bytes()`関数を使用した暗号学的に安全な実装
+- **例**: `550e8400-e29b-41d4-a716-446655440000`
+
+### データベースファイル配置
+- **開発環境**: `fuel/app/database/test.db`
+- **本番環境**: `fuel/app/database/production.db`
+- **バックアップ**: 定期的なファイルコピーによる簡易バックアップ
+- **セキュリティ**: `.htaccess`による外部アクセス制限
+
+### UUID生成PHP例
+```php
+// 暗号学的に安全なUUID生成
+function generate_uuid() {
+    // PHP 7.0+ の random_bytes() を使用（暗号学的に安全）
+    if (function_exists('random_bytes')) {
+        try {
+            $data = random_bytes(16);
+            
+            // version 4 の設定
+            $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+            // variant bits の設定
+            $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+            
+            return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+        } catch (Exception $e) {
+            // フォールバック処理
+        }
+    }
+    
+    // フォールバック: OpenSSL を使用
+    if (function_exists('openssl_random_pseudo_bytes')) {
+        $data = openssl_random_pseudo_bytes(16);
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+    }
+    
+    // 最終フォールバック（非推奨）
+    return sprintf(
+        '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+        mt_rand(0, 0xffff),
+        mt_rand(0, 0x0fff) | 0x4000,
+        mt_rand(0, 0x3fff) | 0x8000,
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+    );
 }
+
+// 使用例
+$user_id = generate_uuid();  // "550e8400-e29b-41d4-a716-446655440000"
 ```
 
 ---
