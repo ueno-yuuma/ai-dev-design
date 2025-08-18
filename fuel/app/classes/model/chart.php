@@ -5,7 +5,7 @@
  * 
  * chartsテーブルにアクセスするためのモデル
  */
-class Model_Chart extends \Model
+class Model_Chart extends \Orm\Model
 {
   /**
    * テーブル名
