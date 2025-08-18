@@ -5,6 +5,7 @@ require COREPATH.'bootstrap.php';
 \Autoloader::add_classes(array(
 	// Add classes you want to override here
 	// Example: 'View' => APPPATH.'classes/view.php',
+	'Model_Auth' => APPPATH.'classes/model/auth.php',
 ));
 
 // Register the autoloader
@@ -22,3 +23,6 @@ require COREPATH.'bootstrap.php';
 
 // Initialize the framework with the config file.
 \Fuel::init('config.php');
+
+// Initialize Model_Auth after Fuel is initialized
+Model_Auth::_init();
