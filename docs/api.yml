@@ -1,0 +1,325 @@
+openapi: 3.0.3
+info:
+  title: AI Chart Design System API
+  description: REST API for chart management with Google ID Token authentication
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/your-org/ai-dev-design
+
+servers:
+  - url: http://localhost:8080/api
+    description: Development server
+
+security:
+  - GoogleIDToken: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns server status and database connectivity
+      security: []
+      responses:
+        '200':
+          description: Server status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2025-08-18 12:00:00"
+                  database:
+                    type: boolean
+                    example: true
+                  database_type:
+                    type: string
+                    example: "SQLite"
+                  database_path:
+                    type: string
+                    example: "/var/www/html/my_fuel_project/fuel/app/database/test.db"
+
+  /charts:
+    get:
+      summary: Get user charts
+      description: Returns all charts for the authenticated user
+      responses:
+        '200':
+          description: List of user charts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Chart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Create a new chart
+      description: Creates a new chart for the authenticated user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  example: "My Flow Chart"
+                content:
+                  type: string
+                  example: "graph TD\n    A[Start] --> B[Process]"
+      responses:
+        '201':
+          description: Chart created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Chart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /chart/{id}:
+    get:
+      summary: Get specific chart
+      description: Returns a specific chart by ID if user has access
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Chart details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Chart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update chart
+      description: Updates a chart if user owns it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: "Updated Chart Title"
+                content:
+                  type: string
+                  example: "graph TD\n    A[Start] --> B[Updated Process]"
+      responses:
+        '200':
+          description: Chart updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Chart'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete chart
+      description: Deletes a chart if user owns it
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Chart deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Chart deleted successfully"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    GoogleIDToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Google ID Token obtained from Google Sign-In
+
+  schemas:
+    Chart:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        title:
+          type: string
+          example: "My Flow Chart"
+        user_id:
+          type: string
+          format: uuid
+          example: "660f9500-f39c-52e5-b827-557766551111"
+        content:
+          type: string
+          example: "graph TD\n    A[Start] --> B[Process]"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-08-18 12:00:00"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-08-18 12:00:00"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "660f9500-f39c-52e5-b827-557766551111"
+        google_user_id:
+          type: string
+          example: "114912345678901234567"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        name:
+          type: string
+          example: "John Doe"
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-08-18 12:00:00"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Error message"
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "title is required"
+
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Authentication required. Please provide a valid Google ID token in Authorization header."
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Chart not found or access denied"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+
+tags:
+  - name: Health
+    description: Server health check
+  - name: Charts
+    description: Chart management operations

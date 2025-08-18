@@ -1,9 +1,13 @@
 <?php
 /**
  * The development database settings. These get merged with the global settings.
+ * 
+ * このプロジェクトはSQLiteデータベースを使用します。
+ * データベースファイル: fuel/app/database/test.db
  */
 
 return array(
+	// SQLiteデータベース設定（メイン使用）
 	'default' => array(
 		'type'        => 'pdo',
 		'connection'  => array(
@@ -14,24 +18,7 @@ return array(
 		),
 		'identifier'   => '"',
 		'table_prefix' => '',
-		'charset'      => 'utf8',
-		'enable_cache' => true,
-		'profiling'    => false,
-	),
-	// MySQL用設定（Docker環境）
-	'mysql' => array(
-		'type'        => 'mysqli',
-		'connection'  => array(
-			'hostname'   => $_ENV['DB_HOST'] ?? 'db',
-			'database'   => $_ENV['DB_NAME'] ?? 'fuelphp',
-			'username'   => $_ENV['DB_USER'] ?? 'fuelphp',
-			'password'   => $_ENV['DB_PASSWORD'] ?? 'fuelphp',
-			'persistent' => false,
-		),
-		'identifier'   => '`',
-		'table_prefix' => '',
-		'charset'      => 'utf8',
-		'collation'    => 'utf8_unicode_ci',
+		'charset'      => null, // SQLiteではcharsetをnullに設定
 		'enable_cache' => true,
 		'profiling'    => false,
 	),

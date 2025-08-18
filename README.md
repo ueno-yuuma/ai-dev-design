@@ -63,3 +63,14 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
 - **ユーザー名**: `root`
 - **パスワード**: `root`
 - **データベース名**: 各自設定した名前
+
+## 📚 ドキュメント
+
+- **[API仕様書](./docs/api.yml)** - OpenAPI 3.0形式のREST API仕様
+- **[システム仕様書](./docs/specifications.md)** - 全体システム設計・要件
+- **[🔧 トラブルシューティング](./docs/troubleshooting/)** - 開発中の問題と解決策集
+
+### よく発生する問題
+- [FuelPHP REST Controller で401エラーが返されない](./docs/troubleshooting/fuelphp-rest-auth.md)
+- [SQLite ORM関連エラー (`Class 'Orm\Model' not found` など)](./docs/troubleshooting/sqlite-orm-setup.md)
+- [REST API設定エラー (CORS, JSON形式など)](./docs/troubleshooting/rest-api-best-practices.md)
