@@ -153,11 +153,27 @@
 - **クロスプラットフォーム**: 多様な環境で動作
 
 ### テーブル設計方針
-- **認証方式**: Google OAuth による認証
+- **認証方式**: Google ID Token による認証
 - **データ形式**: Mermaid形式のテキストデータをcontentカラムに保存
 - **ユーザー管理**: usersテーブルで管理、1:n関係でchartsと関連付け
 - **チャート管理**: titleでチャート名を管理
 - **日時管理**: ISO8601形式でタイムスタンプを記録
+
+### API設計
+詳細なAPI仕様は以下のOpenAPI形式ドキュメントを参照してください：
+**📄 [API仕様書 (OpenAPI 3.0)](./api.yml)**
+
+主要なエンドポイント：
+- `GET /api/health` - ヘルスチェック
+- `GET /api/charts` - ユーザーのチャート一覧取得
+- `POST /api/charts` - 新規チャート作成
+- `GET /api/chart/{id}` - 特定チャート取得
+- `PUT /api/chart/{id}` - チャート更新
+- `DELETE /api/chart/{id}` - チャート削除
+
+**認証方式:**
+- Google ID Token をBearerトークンとして使用
+- `Authorization: Bearer <google_id_token>` ヘッダーで認証
 
 ### SQL例（SQLite用）
 ```sql
