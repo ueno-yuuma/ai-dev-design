@@ -9,10 +9,15 @@ class Controller_Api extends Controller_Rest
 {
     protected $authenticated_user = null;
     protected $current_user = null;
+    protected $format = 'json';
     
     public function before()
     {
         parent::before();
+        
+        // Force JSON format for all responses
+        $this->format = 'json';
+        $this->response->set_header('Content-Type', 'application/json');
         
         // CORS headers
         $this->response->set_header('Access-Control-Allow-Origin', '*');
@@ -23,27 +28,45 @@ class Controller_Api extends Controller_Rest
         if (Input::method() === 'OPTIONS') {
             return $this->response();
         }
-        
+    }
+
+    /**
+     * Router method override for authentication
+     */
+    public function router($method, $params)
+    {
         // Skip authentication for health check
-        if (Request::active()->action === 'health') {
-            return;
+        if ($method === 'health') {
+            return parent::router($method, $params);
         }
-        
+
         // Authenticate user using Google ID Token
         $this->authenticated_user = Model_Auth::get_authenticated_user();
         
         if (!$this->authenticated_user) {
-            return $this->response(array(
+            $this->response(array(
                 'error' => 'Authentication required. Please provide a valid Google ID token in Authorization header.'
             ), 401);
+            return;
         }
-        
-        // Find or create user in database
-        $this->current_user = Model_User::find_or_create_by_google_id(
-            $this->authenticated_user['google_user_id'],
-            $this->authenticated_user['email'],
-            $this->authenticated_user['name']
-        );
+
+        try {
+            // Find or create user in database
+            $this->current_user = Model_User::find_or_create_by_google_id(
+                $this->authenticated_user['google_user_id'],
+                $this->authenticated_user['email'],
+                $this->authenticated_user['name']
+            );
+        } catch (\Exception $e) {
+            \Log::error('User creation error: ' . $e->getMessage());
+            $this->response(array(
+                'error' => 'Authentication failed'
+            ), 401);
+            return;
+        }
+
+        // 認証成功時は通常のルーティングを実行
+        parent::router($method, $params);
     }
 
     /**
@@ -60,8 +83,8 @@ class Controller_Api extends Controller_Rest
                 'data' => $charts
             ));
             
-        } catch (Exception $e) {
-            Log::error('API Error in get_charts: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Log::error('API Error in get_charts: ' . $e->getMessage());
             return $this->response(array(
                 'error' => 'Internal server error'
             ), 500);
@@ -101,8 +124,8 @@ class Controller_Api extends Controller_Rest
                 'data' => $chart->to_array()
             ));
             
-        } catch (Exception $e) {
-            Log::error('API Error in get_chart: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Log::error('API Error in get_chart: ' . $e->getMessage());
             return $this->response(array(
                 'error' => 'Internal server error'
             ), 500);
@@ -135,8 +158,8 @@ class Controller_Api extends Controller_Rest
                 'data' => $chart->to_array()
             ), 201);
             
-        } catch (Exception $e) {
-            Log::error('API Error in post_charts: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Log::error('API Error in post_charts: ' . $e->getMessage());
             return $this->response(array(
                 'error' => 'Internal server error'
             ), 500);
@@ -183,8 +206,8 @@ class Controller_Api extends Controller_Rest
                 'data' => $chart->to_array()
             ));
             
-        } catch (Exception $e) {
-            Log::error('API Error in put_chart: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Log::error('API Error in put_chart: ' . $e->getMessage());
             return $this->response(array(
                 'error' => 'Internal server error'
             ), 500);
@@ -226,8 +249,8 @@ class Controller_Api extends Controller_Rest
                 'message' => 'Chart deleted successfully'
             ));
             
-        } catch (Exception $e) {
-            Log::error('API Error in delete_chart: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Log::error('API Error in delete_chart: ' . $e->getMessage());
             return $this->response(array(
                 'error' => 'Internal server error'
             ), 500);
@@ -246,8 +269,8 @@ class Controller_Api extends Controller_Rest
         $db_status = false;
         try {
             $db_status = Model_Chart::test_connection();
-        } catch (Exception $e) {
-            Log::error('Health check database error: ' . $e->getMessage());
+        } catch (\Exception $e) {
+            \Log::error('Health check database error: ' . $e->getMessage());
         }
         
         return $this->response(array(
