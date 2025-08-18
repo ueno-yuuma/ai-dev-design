@@ -3,14 +3,14 @@
 /**
  * Chart Model
  * 
- * chartテーブルにアクセスするためのモデル
+ * chartsテーブルにアクセスするためのモデル
  */
 class Model_Chart extends \Model
 {
   /**
    * テーブル名
    */
-  protected static $_table_name = 'chart';
+  protected static $_table_name = 'charts';
   
   /**
    * 主キー
@@ -29,9 +29,9 @@ class Model_Chart extends \Model
       'data_type' => 'varchar',
       'label' => 'タイトル',
     ),
-    'google_user_id' => array(
+    'user_id' => array(
       'data_type' => 'varchar',
-      'label' => 'Google User ID',
+      'label' => 'User ID',
       'validation' => array('required'),
     ),
     'content' => array(
@@ -43,25 +43,36 @@ class Model_Chart extends \Model
       'label' => '更新日時',
     ),
     'created_at' => array(
-      'data_type' => 'varchar',
+      'data_type' => 'varchar', 
       'label' => '作成日時',
     ),
+  );
+  
+  /**
+   * Userとの関係
+   */
+  protected static $_belongs_to = array(
+    'user' => array(
+      'key_from' => 'user_id',
+      'model_to' => 'Model_User',
+      'key_to' => 'id',
+    )
   );
   
   /**
    * 新しいチャートを作成
    * 
    * @param string $title チャートタイトル
-   * @param string $google_user_id Google User ID
+   * @param string $user_id User ID
    * @param string $content Mermaidコード
    * @return Model_Chart
    */
-  public static function create_chart($title, $google_user_id, $content = '')
+  public static function create_chart($title, $user_id, $content = '')
   {
     $chart = new static();
     $chart->id = static::generate_uuid();
     $chart->title = $title;
-    $chart->google_user_id = $google_user_id;
+    $chart->user_id = $user_id;
     $chart->content = $content;
     $chart->created_at = date('Y-m-d H:i:s');
     $chart->updated_at = date('Y-m-d H:i:s');
@@ -73,14 +84,14 @@ class Model_Chart extends \Model
   /**
    * ユーザーのチャート一覧を取得
    * 
-   * @param string $google_user_id Google User ID
+   * @param string $user_id User ID
    * @return array
    */
-  public static function get_user_charts($google_user_id)
+  public static function get_user_charts($user_id)
   {
     return \DB::select()
       ->from(static::$_table_name)
-      ->where('google_user_id', $google_user_id)
+      ->where('user_id', $user_id)
       ->order_by('updated_at', 'desc')
       ->execute()
       ->as_array();
@@ -113,7 +124,10 @@ class Model_Chart extends \Model
   public static function test_connection()
   {
     try {
-      \DB::select('1')->execute();
+      // SQLite specific test - check if we can query the chart table
+      $result = \DB::select(\DB::expr('COUNT(*) as count'))
+        ->from(static::$_table_name)
+        ->execute();
       return true;
     } catch (\Exception $e) {
       \Log::error('Database connection test failed: ' . $e->getMessage());
