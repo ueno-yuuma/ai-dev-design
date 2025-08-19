@@ -38,96 +38,30 @@ class Env
         }
         
         if (isset($env_cache[$key])) {
-            $value = static::parse_value($env_cache[$key]);
-            
-            // ファイルパス参照の場合はファイル内容を読み込み
-            if (is_string($value) && static::is_file_reference($value)) {
-                return static::load_from_file($value);
-            }
-            
-            return $value;
+            return static::parse_value($env_cache[$key]);
         }
         
         return $default;
     }
     
     /**
-     * ファイル参照かどうかを判定
+     * Google OAuth Client ID を取得
      * 
-     * @param string $value
-     * @return bool
+     * @return string
      */
-    protected static function is_file_reference($value)
+    public static function get_google_client_id()
     {
-        return strpos($value, 'file:') === 0;
+        return static::get('GOOGLE_CLIENT_ID', '');
     }
     
     /**
-     * ファイルから内容を読み込み（相対パスのみ）
+     * Google OAuth Client Secret を取得（サーバーサイドのみ）
      * 
-     * @param string $file_reference
-     * @return string|array|null
+     * @return string
      */
-    protected static function load_from_file($file_reference)
+    public static function get_google_client_secret()
     {
-        $file_path = substr($file_reference, 5); // 'file:' を除去
-        
-        // プロジェクトルートからの相対パスとして処理
-        $docroot = defined('DOCROOT') ? DOCROOT : realpath(__DIR__ . '/../../..');
-        $full_path = $docroot . DIRECTORY_SEPARATOR . $file_path;
-        
-        if (!file_exists($full_path)) {
-            Log::warning("Secret file not found: {$full_path}");
-            return null;
-        }
-        
-        // ファイル権限チェック
-        if (!is_readable($full_path)) {
-            Log::warning("Secret file not readable: {$full_path}");
-            return null;
-        }
-        
-        $content = file_get_contents($full_path);
-        if ($content === false) {
-            return null;
-        }
-        
-        $content = trim($content);
-        
-        // JSONファイルの場合は配列として返す
-        if (static::is_json_file($file_path)) {
-            $json_data = json_decode($content, true);
-            return $json_data !== null ? $json_data : $content;
-        }
-        
-        return $content;
-    }
-    
-    /**
-     * JSONファイルかどうかを判定
-     * 
-     * @param string $file_path
-     * @return bool
-     */
-    protected static function is_json_file($file_path)
-    {
-        return pathinfo($file_path, PATHINFO_EXTENSION) === 'json';
-    }
-    
-    /**
-     * Google OAuth設定を取得
-     * 
-     * @return array|null
-     */
-    public static function get_google_oauth()
-    {
-        $oauth_data = static::get('GOOGLE_OAUTH_JSON');
-        
-        if (is_array($oauth_data) && isset($oauth_data['web'])) {
-            return $oauth_data['web'];
-        }
-        
-        return $oauth_data;
+        return static::get('GOOGLE_CLIENT_SECRET', '');
     }
     
     /**

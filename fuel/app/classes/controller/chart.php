@@ -15,17 +15,8 @@ class Controller_Chart extends Controller
             // ヘルスチェック用にAPIの状態を確認
             $api_status = $this->check_api_health();
             
-            // Google OAuth設定を直接読み込み
-            $json_file = DOCROOT . '../secrets/google_oauth_client.json';
-            $client_id = '';
-            
-            if (file_exists($json_file)) {
-                $json_content = file_get_contents($json_file);
-                $json_data = json_decode($json_content, true);
-                if ($json_data && isset($json_data['web']['client_id'])) {
-                    $client_id = $json_data['web']['client_id'];
-                }
-            }
+            // Google OAuth Client IDを環境変数から取得（セキュア）
+            $client_id = Env::get('GOOGLE_CLIENT_ID', '');
             
             // ビューにデータを渡す
             $data = array(
