@@ -13,6 +13,50 @@
 /fuel/vendor/
 /docs/vendor/
 
+# Environment and secret files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Secrets directory (actual secret files)
+/secrets/*.txt
+/secrets/*.key
+/secrets/*.pem
+/secrets/*.json
+!/secrets/*.example
+!/secrets/*.json.example
+!/secrets/README.md
+
+# Local configuration files (contains actual secrets)
+/fuel/app/config/local/
+/fuel/app/config/*/local.php
+
+# Environment-specific files with actual secrets (if not using env vars)
+# 注意: 環境変数を使用する場合は、これらのファイルはコミットしても安全です
+# /fuel/app/config/development/google.php
+# /fuel/app/config/production/google.php
+# /fuel/app/config/staging/google.php
+
+# Database files (if contains sensitive data)
+/fuel/app/database/*.db
+!/fuel/app/database/.gitkeep
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
 # OS generated files
 .DS_Store
 *~
+Thumbs.db
+
+# Docker volumes and data
+/docker/data/
+/docker/logs/
+
+# Backup files
+*.bak
+*.backup

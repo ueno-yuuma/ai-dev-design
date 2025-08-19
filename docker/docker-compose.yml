@@ -8,5 +8,7 @@ services:
       - "8080:80"
     volumes:
       - ..:/var/www/html/my_fuel_project
+    env_file:
+      - ../.env
     environment:
       - FUEL_ENV=development
