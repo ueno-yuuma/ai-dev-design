@@ -106,6 +106,109 @@
         .left-sidebar:hover .sidebar-text {
             opacity: 1;
         }
+        
+        /* チャートリストのスタイル */
+        .chart-list {
+            width: 100%;
+            margin-top: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .left-sidebar:hover .chart-list {
+            opacity: 1;
+        }
+        
+        .chart-list-title {
+            color: #bdc3c7;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 0 12px 0;
+            border-bottom: 1px solid #34495e;
+            margin-bottom: 12px;
+        }
+        
+        .chart-items {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .chart-items::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .chart-items::-webkit-scrollbar-track {
+            background: #34495e;
+        }
+        
+        .chart-items::-webkit-scrollbar-thumb {
+            background: #7f8c8d;
+            border-radius: 2px;
+        }
+        
+        .chart-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ecf0f1;
+            cursor: pointer;
+            padding: 8px 0;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .chart-item:hover {
+            background-color: rgba(52, 73, 94, 0.5);
+            color: #3498db;
+        }
+        
+        .chart-title {
+            flex: 1;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+        }
+        
+        .chart-actions {
+            opacity: 0;
+            display: flex;
+            gap: 4px;
+            transition: opacity 0.2s ease;
+        }
+        
+        .chart-item:hover .chart-actions {
+            opacity: 1;
+        }
+        
+        .action-button {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(231, 76, 60, 0.1);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .action-button:hover {
+            background-color: rgba(231, 76, 60, 0.3);
+        }
+        
+        .action-button svg {
+            width: 12px;
+            height: 12px;
+            color: #e74c3c;
+        }
 
         /* フローチャート操作ボタン */
         .chart-controls {
@@ -334,6 +437,30 @@
                             </svg>
                         </div>
                         <span class="sidebar-text">新規作成</span>
+                    </div>
+                    
+                    <!-- チャートリスト -->
+                    <div class="chart-list" data-bind="visible: savedCharts().length > 0">
+                        <div class="chart-list-title">
+                            <span class="sidebar-text">保存済みチャート</span>
+                        </div>
+                        <div class="chart-items" data-bind="foreach: savedCharts">
+                            <div class="chart-item" data-bind="click: $parent.loadChart, attr: { title: title }">
+                                <div class="sidebar-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <span class="sidebar-text chart-title" data-bind="text: title"></span>
+                                <div class="chart-actions">
+                                    <div class="action-button" title="削除" data-bind="click: function(data, event) { event.stopPropagation(); $parent.deleteChart(data); }">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 16 16" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.5 3.5V2a1 1 0 011-1h3a1 1 0 011 1v1.5m-9 1V14a2 2 0 002 2h6a2 2 0 002-2V4.5m-9 0h9m-4.5 7v-4m-2 4v-4" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="sidebar-bottom">
