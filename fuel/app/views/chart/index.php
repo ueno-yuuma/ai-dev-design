@@ -21,7 +21,7 @@
     <script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.17/dist/interact.min.js"></script>
     
     <!-- Google Identity Services API -->
-    <script src="https://accounts.google.com/gsi/client" async onload="console.log('Google GSI client loaded')"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     
     <style>
         body {
@@ -314,17 +314,17 @@
         <!-- 上部ヘッダー -->
         <div class="top-header">
             <div class="header-icons">
-                <div class="header-icon" title="インポート" data-bind="click: importChart">
+                <div class="header-icon" title="インポート" data-bind="click: $root.importChart">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
                     </svg>
                 </div>
-                <div class="header-icon" title="エクスポート" data-bind="click: exportChart">
+                <div class="header-icon" title="エクスポート" data-bind="click: $root.exportChart">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
                 </div>
-                <div class="header-icon" title="ログアウト" data-bind="click: logout">
+                <div class="header-icon" title="ログアウト" data-bind="click: $root.logout">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
@@ -425,6 +425,6 @@
             console.error('ERROR: Google Client ID is empty or not configured');
         }
     </script>
-    <script src="/assets/js/chart-app.js"></script>
+    <script src="/assets/js/chart-app.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

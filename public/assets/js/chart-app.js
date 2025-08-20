@@ -383,26 +383,11 @@ function ChartViewModel() {
         }
     };
     
-    // ナビゲーションタブ設定
+    // ナビゲーションタブ設定（削除されたタブ用の空関数）
     self.setupNavTabs = function() {
-        const navTabs = document.querySelectorAll('.nav-tab');
-        navTabs.forEach(tab => {
-            tab.addEventListener('click', function() {
-                // アクティブタブの切り替え
-                navTabs.forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // ノードタイプを設定
-                self.selectedNodeType = this.dataset.nodeType || 'process';
-            });
-            
-            // ドラッグ&ドロップ機能
-            tab.addEventListener('dragstart', function(e) {
-                e.dataTransfer.setData('text/plain', this.dataset.nodeType);
-            });
-            
-            tab.setAttribute('draggable', 'true');
-        });
+        console.log('Navigation tabs have been removed from UI');
+        // Process, Decision, Input, Output tabs were removed
+        // This function is kept for compatibility but does nothing
     };
     
     // ドラッグ&ドロップ設定
@@ -618,18 +603,95 @@ document.addEventListener('DOMContentLoaded', function() {
     ko.applyBindings(viewModel);
     viewModel.initialize();
     
-    // Google Sign-In初期化（公式ドキュメントに基づく正しい実装）
-    window.initializeGoogleSignIn = function() {
+    // Promise-based Google Script Loader（改良版）
+    function loadGoogleScript() {
+        return new Promise((resolve, reject) => {
+            console.log('Starting Google Script loading process');
+            
+            // 既にAPIが利用可能な場合
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                console.log('Google API already available');
+                resolve();
+                return;
+            }
+            
+            // 既にスクリプトが読み込まれているかチェック
+            let existingScript = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+            
+            if (existingScript) {
+                console.log('Google script already exists, waiting for API...');
+                // 既存のスクリプトがある場合、APIが利用可能になるまで待機
+                let attempts = 0;
+                const maxAttempts = 50; // 5秒間待機
+                
+                const checkAPI = () => {
+                    attempts++;
+                    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                        console.log('Google API became available');
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        reject(new Error('Google API did not become available after waiting'));
+                    } else {
+                        setTimeout(checkAPI, 100);
+                    }
+                };
+                
+                checkAPI();
+                return;
+            }
+            
+            console.log('Creating new Google script element');
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            
+            script.onload = () => {
+                console.log('Google GSI script onload fired');
+                
+                // スクリプト読み込み後、APIが利用可能になるまで待機
+                let attempts = 0;
+                const maxAttempts = 50;
+                
+                const checkAPI = () => {
+                    attempts++;
+                    console.log(`Checking Google API availability (attempt ${attempts})`);
+                    
+                    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                        console.log('Google API is now available');
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        console.error('Google API not available after maximum attempts');
+                        reject(new Error('Google API not available after script load'));
+                    } else {
+                        setTimeout(checkAPI, 100);
+                    }
+                };
+                
+                checkAPI();
+            };
+            
+            script.onerror = (error) => {
+                console.error('Failed to load Google GSI client script:', error);
+                reject(new Error('Script loading failed'));
+            };
+            
+            console.log('Appending Google script to document head');
+            document.head.appendChild(script);
+        });
+    }
+    
+    // Google Sign-In 初期化と描画
+    function initializeGoogleSignIn() {
         console.log('Initializing Google Sign-In with Client ID:', window.GOOGLE_CLIENT_ID);
         
         if (!window.GOOGLE_CLIENT_ID || window.GOOGLE_CLIENT_ID === '') {
             console.error('Google Client ID is not set');
-            return;
+            return Promise.reject(new Error('Client ID not set'));
         }
         
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            try {
-                // Step 1: Initialize (必須の第一ステップ)
+        return loadGoogleScript()
+            .then(() => {
+                // 初期化
                 google.accounts.id.initialize({
                     client_id: window.GOOGLE_CLIENT_ID,
                     callback: handleCredentialResponse,
@@ -639,7 +701,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 console.log('Google Identity Services initialized successfully');
                 
-                // Step 2: Render Button (初期化完了後に実行)
+                // ボタン描画
                 const buttonDiv = document.getElementById('google-signin-button');
                 if (buttonDiv) {
                     google.accounts.id.renderButton(buttonDiv, {
@@ -650,37 +712,39 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                     console.log('Google Sign-In button rendered successfully');
                 } else {
-                    console.error('Button container not found');
+                    throw new Error('Button container not found');
                 }
-                
-            } catch (error) {
-                console.error('Google Sign-In initialization failed:', error);
-            }
-        } else {
-            console.error('Google Identity Services not available');
-        }
-    };
-    
-    // スクリプト読み込み完了まで待機
-    function waitForGoogleScript() {
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            // DOM要素の存在を確認してから初期化
-            const buttonDiv = document.getElementById('google-signin-button');
-            if (buttonDiv) {
-                window.initializeGoogleSignIn();
-            } else {
-                // DOM要素がまだない場合は少し待つ
-                setTimeout(waitForGoogleScript, 100);
-            }
-        } else {
-            // Googleスクリプトがまだ読み込まれていない場合は待つ
-            setTimeout(waitForGoogleScript, 100);
-        }
+            })
+            .catch(error => {
+                console.error('Google Sign-In setup failed:', error);
+            });
     }
     
-    // ページ完全読み込み後に初期化開始
+    // Google Sign-Inの初期化を遅延実行
+    function delayedGoogleSignInInit() {
+        console.log('Attempting delayed Google Sign-In initialization');
+        initializeGoogleSignIn()
+            .catch(error => {
+                console.warn('First attempt failed, retrying...', error);
+                // 失敗した場合は再試行
+                setTimeout(() => {
+                    initializeGoogleSignIn()
+                        .catch(retryError => {
+                            console.error('Google Sign-In initialization failed after retry:', retryError);
+                        });
+                }, 2000);
+            });
+    }
+    
+    // 複数のタイミングで初期化を試行
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, scheduling Google Sign-In initialization');
+        setTimeout(delayedGoogleSignInInit, 1000);
+    });
+    
     window.addEventListener('load', () => {
-        setTimeout(waitForGoogleScript, 500);
+        console.log('Window loaded, scheduling Google Sign-In initialization');
+        setTimeout(delayedGoogleSignInInit, 1500);
     });
     
     // キーボードショートカット
