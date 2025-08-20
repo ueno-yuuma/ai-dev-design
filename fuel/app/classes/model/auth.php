@@ -74,16 +74,21 @@ class Model_Auth extends \Model
      */
     public static function extract_token_from_header()
     {
-        // FuelPHPのInput::headers()を使用
-        $auth_header_value = \Input::header('Authorization');
+        // FuelPHPのInputクラスからヘッダーを取得
+        $headers = \Input::headers();
         
-        if ($auth_header_value) {
-            // Expected format: "Bearer <token>"
+        // 'Authorization'ヘッダーが存在し、かつ空でないことを確認
+        if (isset($headers['Authorization']) && !empty($headers['Authorization'])) {
+            $auth_header_value = $headers['Authorization'];
+
+            // "Bearer <token>"の形式に一致するかどうかを正規表現でチェック
             if (preg_match('/Bearer\s+(.*)$/i', $auth_header_value, $matches)) {
+                // トークン部分を返す
                 return $matches[1];
             }
         }
         
+        // ヘッダーが存在しない、または形式が不正な場合はfalseを返す
         return false;
     }
     
