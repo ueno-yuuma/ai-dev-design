@@ -106,6 +106,109 @@
         .left-sidebar:hover .sidebar-text {
             opacity: 1;
         }
+        
+        /* チャートリストのスタイル */
+        .chart-list {
+            width: 100%;
+            margin-top: 20px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .left-sidebar:hover .chart-list {
+            opacity: 1;
+        }
+        
+        .chart-list-title {
+            color: #bdc3c7;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 8px 0 12px 0;
+            border-bottom: 1px solid #34495e;
+            margin-bottom: 12px;
+        }
+        
+        .chart-items {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .chart-items::-webkit-scrollbar {
+            width: 4px;
+        }
+        
+        .chart-items::-webkit-scrollbar-track {
+            background: #34495e;
+        }
+        
+        .chart-items::-webkit-scrollbar-thumb {
+            background: #7f8c8d;
+            border-radius: 2px;
+        }
+        
+        .chart-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #ecf0f1;
+            cursor: pointer;
+            padding: 8px 0;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        
+        .chart-item:hover {
+            background-color: rgba(52, 73, 94, 0.5);
+            color: #3498db;
+        }
+        
+        .chart-title {
+            flex: 1;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 120px;
+        }
+        
+        .chart-actions {
+            opacity: 0;
+            display: flex;
+            gap: 4px;
+            transition: opacity 0.2s ease;
+        }
+        
+        .chart-item:hover .chart-actions {
+            opacity: 1;
+        }
+        
+        .action-button {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(231, 76, 60, 0.1);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .action-button:hover {
+            background-color: rgba(231, 76, 60, 0.3);
+        }
+        
+        .action-button svg {
+            width: 12px;
+            height: 12px;
+            color: #e74c3c;
+        }
 
         /* フローチャート操作ボタン */
         .chart-controls {
@@ -156,6 +259,68 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+        }
+        
+        /* チャートタイトルバー */
+        .chart-title-bar {
+            background-color: #ffffff;
+            padding: 15px 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .chart-title-input {
+            flex: 1;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 16px;
+            font-weight: 500;
+            font-family: 'Noto Sans JP', sans-serif;
+            background-color: #ffffff;
+            transition: all 0.2s ease;
+            max-width: 400px;
+        }
+        
+        .chart-title-input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        
+        .chart-title-input::placeholder {
+            color: #6c757d;
+            font-weight: 400;
+        }
+        
+        .chart-info {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+            color: #6c757d;
+            margin-left: 15px;
+        }
+        
+        .chart-info span:first-child {
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        
+        .chart-info .status-unsaved {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .chart-info .status-saved {
+            background-color: #d1ecf1;
+            color: #0c5460;
         }
         
         .canvas-content {
@@ -335,6 +500,39 @@
                         </div>
                         <span class="sidebar-text">新規作成</span>
                     </div>
+                    
+                    <div class="sidebar-item" title="保存 (Ctrl+S)" data-bind="click: saveChart, visible: currentChart">
+                        <div class="sidebar-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text">保存</span>
+                    </div>
+                    
+                    <!-- チャートリスト -->
+                    <div class="chart-list" data-bind="visible: savedCharts().length > 0">
+                        <div class="chart-list-title">
+                            <span class="sidebar-text">保存済みチャート</span>
+                        </div>
+                        <div class="chart-items" data-bind="foreach: savedCharts">
+                            <div class="chart-item" data-bind="click: $parent.loadChart, attr: { title: title }">
+                                <div class="sidebar-icon">
+                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <span class="sidebar-text chart-title" data-bind="text: title"></span>
+                                <div class="chart-actions">
+                                    <div class="action-button" title="削除" data-bind="click: function(data, event) { event.stopPropagation(); $parent.deleteChart(data); }">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 16 16" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.5 3.5V2a1 1 0 011-1h3a1 1 0 011 1v1.5m-9 1V14a2 2 0 002 2h6a2 2 0 002-2V4.5m-9 0h9m-4.5 7v-4m-2 4v-4" />
+                                        </svg>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="sidebar-bottom">
                     <div class="sidebar-item" title="設定" data-bind="click: $root.showSettings">
@@ -351,10 +549,29 @@
 
             <!-- 中央のキャンバス -->
             <div class="canvas-container">
+                <!-- チャートタイトル入力エリア -->
+                <div class="chart-title-bar" data-bind="visible: currentChart">
+                    <input type="text" 
+                           class="chart-title-input" 
+                           placeholder="チャートタイトルを入力..."
+                           data-bind="value: currentChartTitle, valueUpdate: 'input'"
+                           maxlength="100">
+                    <div class="chart-info">
+                        <span data-bind="text: currentChart() && currentChart().id ? '保存済み' : '未保存', 
+                                         css: { 'status-saved': currentChart() && currentChart().id, 'status-unsaved': !currentChart() || !currentChart().id }"></span>
+                        <span data-bind="text: currentChart() && currentChart().updated_at ? '・更新: ' + currentChart().updated_at : ''"></span>
+                    </div>
+                </div>
+                
                 <div class="canvas-content">
                     <div class="chart-canvas" id="chart-canvas" data-bind="event: { drop: onDrop, dragover: allowDrop }">
                         <!-- フローチャート操作ボタン -->
                         <div class="chart-controls">
+                            <div class="control-button" title="保存 (Ctrl+S)" data-bind="click: $root.saveChart">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                            </div>
                             <div class="control-button" title="インポート" data-bind="click: $root.importChart">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
