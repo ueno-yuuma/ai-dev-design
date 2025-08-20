@@ -399,8 +399,8 @@
         }
         
         .error-message, .success-message {
-            position: fixed;
-            top: 20px;
+            position: absolute;
+            top: 75px;
             right: 20px;
             padding: 12px 20px;
             border-radius: 6px;
@@ -595,6 +595,11 @@
                                 </svg>
                             </div>
                         </div>
+                        
+                        <!-- エラー・成功メッセージ -->
+                        <div class="error-message" id="error-message" data-bind="visible: errorMessage, text: errorMessage"></div>
+                        <div class="success-message" id="success-message" data-bind="visible: successMessage, text: successMessage"></div>
+                        
                         <div id="mermaid-display" data-bind="html: mermaidHtml"></div>
                     </div>
                 </div>
@@ -602,9 +607,6 @@
 
         </div>
 
-        <!-- エラー・成功メッセージ -->
-        <div class="error-message" id="error-message" data-bind="visible: errorMessage, text: errorMessage"></div>
-        <div class="success-message" id="success-message" data-bind="visible: successMessage, text: successMessage"></div>
         
         <!-- ローディング -->
         <div class="loading" id="loading" data-bind="visible: isLoading">
