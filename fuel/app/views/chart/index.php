@@ -512,15 +512,6 @@
                         <span class="sidebar-text">新規作成</span>
                     </div>
                     
-                    <div class="sidebar-item" title="保存 (Ctrl+S)" data-bind="click: saveChart, visible: currentChart">
-                        <div class="sidebar-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                        </div>
-                        <span class="sidebar-text">保存</span>
-                    </div>
-                    
                     <!-- チャートリスト -->
                     <div class="chart-list" data-bind="visible: savedCharts().length > 0">
                         <div class="chart-list-title">
