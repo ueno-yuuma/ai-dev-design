@@ -28,25 +28,24 @@ class Model_Auth extends \Model
      */
     public static function verify_google_token($id_token)
     {
+        if (empty($id_token)) {
+            \Log::warning('Auth: Empty ID token provided.');
+            return false;
+        }
+
+        if (empty(static::$google_client_id)) {
+            \Log::error('Auth: Google Client ID not configured on backend.');
+            return false;
+        }
+
+        \Log::info('Auth: Attempting to verify token with backend Client ID: ' . static::$google_client_id);
+
         try {
-            if (empty($id_token)) {
-                \Log::warning('Empty ID token provided');
-                return false;
-            }
-            
-            if (empty(static::$google_client_id)) {
-                \Log::error('Google Client ID not configured');
-                return false;
-            }
-            
-            // Create Google Client
             $client = new \Google_Client(['client_id' => static::$google_client_id]);
-            
-            // Verify the ID token
             $payload = $client->verifyIdToken($id_token);
             
             if ($payload) {
-                // Token is valid, extract user information
+                \Log::info('Auth: Token successfully verified for email: ' . $payload['email']);
                 $user_data = array(
                     'google_user_id' => $payload['sub'],
                     'email' => $payload['email'],
@@ -54,15 +53,15 @@ class Model_Auth extends \Model
                     'picture' => isset($payload['picture']) ? $payload['picture'] : '',
                     'email_verified' => isset($payload['email_verified']) ? $payload['email_verified'] : false
                 );
-                
                 return $user_data;
             } else {
-                \Log::warning('Invalid Google ID token provided');
+                \Log::warning('Auth: Token verification failed. verifyIdToken returned false. This may be due to an expired token or invalid signature.');
                 return false;
             }
             
         } catch (\Exception $e) {
-            \Log::error('Error verifying Google ID token: ' . $e->getMessage());
+            // Google_Client's verifyIdToken throws exceptions for specific failures like audience mismatch.
+            \Log::error('Auth: Exception during token verification: ' . $e->getMessage());
             return false;
         }
     }
