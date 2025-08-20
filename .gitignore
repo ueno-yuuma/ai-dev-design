@@ -61,3 +61,5 @@ Thumbs.db
 *.bak
 *.backup
 /.claude
+
+fuel/app/database/test.db

@@ -16,6 +16,11 @@ return array(
 	'api/chart/(:segment)' => 'api/chart/$1',
 	'api/health' => 'api/health',
 	
+	// Auth Routes  
+	'api/login' => 'api/login',
+	'api/logout' => 'api/logout',
+	'api/status' => 'api/status',
+	
 	// 旧ルート（下位互換）
 	'welcome' => 'welcome/index',
 );

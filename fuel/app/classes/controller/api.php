@@ -35,37 +35,54 @@ class Controller_Api extends Controller_Rest
      */
     public function router($method, $params)
     {
-        // Skip authentication for health check
-        if ($method === 'health') {
+        // Skip authentication for health check and auth endpoints
+        $public_endpoints = array('health', 'login', 'status');
+        if (in_array($method, $public_endpoints)) {
             return parent::router($method, $params);
         }
 
-        // Authenticate user using Google ID Token
-        $this->authenticated_user = Model_Auth::get_authenticated_user();
+        // Check for cookie-based authentication
+        $session_id = Cookie::get('auth_session');
         
-        if (!$this->authenticated_user) {
+        if (!$session_id) {
             $this->response(array(
-                'error' => 'Authentication required. Please provide a valid Google ID token in Authorization header.'
+                'error' => 'Authentication required. Please login first.'
+            ), 401);
+            return;
+        }
+        
+        $user_data = $this->get_session_data($session_id);
+        
+        if (!$user_data) {
+            Cookie::delete('auth_session', '/');
+            $this->response(array(
+                'error' => 'Session expired. Please login again.'
             ), 401);
             return;
         }
 
         try {
-            // Find or create user in database
-            $this->current_user = Model_User::find_or_create_by_google_id(
-                $this->authenticated_user['google_user_id'],
-                $this->authenticated_user['email'],
-                $this->authenticated_user['name']
-            );
+            // Load current user from database
+            $this->current_user = Model_User::find($user_data['user_id']);
+            
+            if (!$this->current_user) {
+                $this->destroy_session($session_id);
+                Cookie::delete('auth_session', '/');
+                $this->response(array(
+                    'error' => 'User not found. Please login again.'
+                ), 401);
+                return;
+            }
+            
         } catch (\Exception $e) {
-            \Log::error('User creation error: ' . $e->getMessage());
+            \Log::error('User loading error: ' . $e->getMessage());
             $this->response(array(
                 'error' => 'Authentication failed'
             ), 401);
             return;
         }
 
-        // 認証成功時は通常のルーティングを実行
+        // Authentication successful, continue with normal routing
         parent::router($method, $params);
     }
 
@@ -258,6 +275,113 @@ class Controller_Api extends Controller_Rest
     }
 
     /**
+     * POST /api/auth/login
+     * Server-side Google token verification and session creation
+     */
+    public function post_login()
+    {
+        try {
+            $input = Input::json();
+            
+            if (empty($input['credential'])) {
+                return $this->response(array(
+                    'error' => 'Google credential is required'
+                ), 400);
+            }
+            
+            // Verify Google ID Token on server-side
+            $user_data = Model_Auth::verify_google_token($input['credential']);
+            
+            if (!$user_data) {
+                return $this->response(array(
+                    'error' => 'Invalid Google credential'
+                ), 401);
+            }
+            
+            // Find or create user in database
+            $user = Model_User::find_or_create_by_google_id(
+                $user_data['google_user_id'],
+                $user_data['email'],
+                $user_data['name']
+            );
+            
+            // Create secure session
+            $session_id = $this->create_secure_session($user->id, $user_data);
+            
+            // Set HttpOnly cookie (FuelPHP syntax)
+            Cookie::set('auth_session', $session_id, time() + (24 * 60 * 60), '/', null, false, true);
+            
+            return $this->response(array(
+                'success' => true,
+                'user' => array(
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email
+                )
+            ));
+            
+        } catch (\Exception $e) {
+            \Log::error('Login error: ' . $e->getMessage());
+            return $this->response(array(
+                'error' => 'Authentication failed'
+            ), 500);
+        }
+    }
+    
+    /**
+     * POST /api/auth/logout
+     * Clear authentication session
+     */
+    public function post_logout()
+    {
+        $session_id = Cookie::get('auth_session');
+        
+        if ($session_id) {
+            $this->destroy_session($session_id);
+        }
+        
+        Cookie::delete('auth_session', '/');
+        
+        return $this->response(array(
+            'success' => true,
+            'message' => 'Logged out successfully'
+        ));
+    }
+    
+    /**
+     * GET /api/auth/status
+     * Check authentication status
+     */
+    public function get_status()
+    {
+        $session_id = Cookie::get('auth_session');
+        
+        if (!$session_id) {
+            return $this->response(array(
+                'authenticated' => false
+            ));
+        }
+        
+        $user_data = $this->get_session_data($session_id);
+        
+        if (!$user_data) {
+            Cookie::delete('auth_session', '/');
+            return $this->response(array(
+                'authenticated' => false
+            ));
+        }
+        
+        return $this->response(array(
+            'authenticated' => true,
+            'user' => array(
+                'id' => $user_data['user_id'],
+                'name' => $user_data['name'],
+                'email' => $user_data['email']
+            )
+        ));
+    }
+
+    /**
      * GET /api/health
      * Health check endpoint
      */
@@ -280,5 +404,74 @@ class Controller_Api extends Controller_Rest
             'database_type' => 'SQLite',
             'database_path' => APPPATH . 'database/test.db'
         ));
+    }
+    
+    /**
+     * Create secure session
+     */
+    private function create_secure_session($user_id, $user_data)
+    {
+        $session_id = bin2hex(random_bytes(32));
+        
+        // Store session in database or cache (using simple file storage for now)
+        $session_data = array(
+            'user_id' => $user_id,
+            'email' => $user_data['email'],
+            'name' => $user_data['name'],
+            'created_at' => time(),
+            'expires_at' => time() + (24 * 60 * 60)
+        );
+        
+        $session_file = APPPATH . 'tmp/sessions/' . $session_id;
+        
+        // Create sessions directory if it doesn't exist
+        if (!is_dir(dirname($session_file))) {
+            mkdir(dirname($session_file), 0700, true);
+        }
+        
+        file_put_contents($session_file, json_encode($session_data));
+        
+        return $session_id;
+    }
+    
+    /**
+     * Get session data
+     */
+    private function get_session_data($session_id)
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/', $session_id)) {
+            return false;
+        }
+        
+        $session_file = APPPATH . 'tmp/sessions/' . $session_id;
+        
+        if (!file_exists($session_file)) {
+            return false;
+        }
+        
+        $session_data = json_decode(file_get_contents($session_file), true);
+        
+        if (!$session_data || $session_data['expires_at'] < time()) {
+            $this->destroy_session($session_id);
+            return false;
+        }
+        
+        return $session_data;
+    }
+    
+    /**
+     * Destroy session
+     */
+    private function destroy_session($session_id)
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/', $session_id)) {
+            return;
+        }
+        
+        $session_file = APPPATH . 'tmp/sessions/' . $session_id;
+        
+        if (file_exists($session_file)) {
+            unlink($session_file);
+        }
     }
 }
