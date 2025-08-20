@@ -438,6 +438,13 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             max-width: 400px;
         }
+
+        #google-signin-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
+        }
         
         #mermaid-display {
             width: 100%;
