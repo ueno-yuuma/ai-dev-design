@@ -55,7 +55,6 @@ class Model_Auth extends \Model
                     'email_verified' => isset($payload['email_verified']) ? $payload['email_verified'] : false
                 );
                 
-                \Log::info('Successfully verified Google ID token for user: ' . $payload['email']);
                 return $user_data;
             } else {
                 \Log::warning('Invalid Google ID token provided');
