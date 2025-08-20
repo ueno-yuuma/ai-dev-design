@@ -101,6 +101,7 @@
             font-size: 14px;
             opacity: 0;
             transition: opacity 0.3s ease;
+            white-space: nowrap;
         }
         
         .left-sidebar:hover .sidebar-text {
@@ -128,7 +129,9 @@
             padding: 8px 0 12px 0;
             border-bottom: 1px solid #34495e;
             margin-bottom: 12px;
+            white-space: nowrap;
         }
+
         
         .chart-items {
             display: flex;
