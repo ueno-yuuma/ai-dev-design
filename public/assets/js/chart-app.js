@@ -21,13 +21,25 @@ function initializeMermaid() {
     if (!mermaidInitialized) {
         mermaid.initialize({
             startOnLoad: false,
-            theme: 'default',
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#b8e6b8',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#4caf50',
+                lineColor: '#666',
+                secondaryColor: '#cce7ff',
+                tertiaryColor: '#ffe6cc',
+                background: '#e5e5e5',
+                mainBkg: '#ffffff',
+                secondBkg: '#f8f9fa'
+            },
             securityLevel: 'loose',
             fontFamily: 'Noto Sans JP, sans-serif',
             flowchart: {
                 useMaxWidth: true,
                 htmlLabels: true,
-                curve: 'basis'
+                curve: 'basis',
+                padding: 20
             }
         });
         mermaidInitialized = true;
@@ -79,6 +91,7 @@ function ChartViewModel() {
         initializeMermaid();
         self.checkAuthStatus();
         self.setupDragAndDrop();
+        self.setupNavTabs();
         self.renderMermaid();
     };
     
@@ -359,20 +372,31 @@ function ChartViewModel() {
         }
     };
     
-    // ドラッグ&ドロップ設定
-    self.setupDragAndDrop = function() {
-        // ノードパレットからのドラッグ
-        const nodeTypes = document.querySelectorAll('.node-type');
-        nodeTypes.forEach(node => {
-            node.addEventListener('dragstart', function(e) {
-                e.dataTransfer.setData('text/plain', this.dataset.nodeType);
-                this.classList.add('dragging');
+    // ナビゲーションタブ設定
+    self.setupNavTabs = function() {
+        const navTabs = document.querySelectorAll('.nav-tab');
+        navTabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // アクティブタブの切り替え
+                navTabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // ノードタイプを設定
+                self.selectedNodeType = this.dataset.nodeType || 'process';
             });
             
-            node.addEventListener('dragend', function(e) {
-                this.classList.remove('dragging');
+            // ドラッグ&ドロップ機能
+            tab.addEventListener('dragstart', function(e) {
+                e.dataTransfer.setData('text/plain', this.dataset.nodeType);
             });
+            
+            tab.setAttribute('draggable', 'true');
         });
+    };
+    
+    // ドラッグ&ドロップ設定
+    self.setupDragAndDrop = function() {
+        // タブからのドラッグは上記のsetupNavTabsで処理
     };
     
     // ドロップ許可
@@ -424,6 +448,11 @@ function ChartViewModel() {
             'output': '出力'
         };
         return typeMap[nodeType] || '処理';
+    };
+    
+    // 設定表示
+    self.showSettings = function() {
+        self.showError('設定機能は実装予定です');
     };
     
     // ノード詳細化（AI機能）
