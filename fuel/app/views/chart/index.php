@@ -101,6 +101,7 @@
             font-size: 14px;
             opacity: 0;
             transition: opacity 0.3s ease;
+            white-space: nowrap;
         }
         
         .left-sidebar:hover .sidebar-text {
@@ -128,7 +129,9 @@
             padding: 8px 0 12px 0;
             border-bottom: 1px solid #34495e;
             margin-bottom: 12px;
+            white-space: nowrap;
         }
+
         
         .chart-items {
             display: flex;
@@ -261,34 +264,35 @@
             overflow: hidden;
         }
         
-        /* チャートタイトルバー */
-        .chart-title-bar {
-            background-color: #ffffff;
-            padding: 15px 20px;
-            border-bottom: 1px solid #dee2e6;
+        /* チャートタイトルエリア */
+        .chart-title-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
         }
         
         .chart-title-input {
-            flex: 1;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px 15px;
             font-size: 16px;
             font-weight: 500;
             font-family: 'Noto Sans JP', sans-serif;
-            background-color: #ffffff;
-            transition: all 0.2s ease;
-            max-width: 400px;
+            background-color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            min-width: 300px;
         }
         
         .chart-title-input:focus {
             outline: none;
             border-color: #007bff;
-            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
         
         .chart-title-input::placeholder {
@@ -299,17 +303,20 @@
         .chart-info {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 13px;
+            gap: 8px;
+            font-size: 12px;
             color: #6c757d;
-            margin-left: 15px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 6px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         .chart-info span:first-child {
             font-weight: 500;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
             text-transform: uppercase;
         }
         
@@ -399,8 +406,8 @@
         }
         
         .error-message, .success-message {
-            position: fixed;
-            top: 20px;
+            position: absolute;
+            top: 75px;
             right: 20px;
             padding: 12px 20px;
             border-radius: 6px;
@@ -437,6 +444,13 @@
             border-radius: 10px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.15);
             max-width: 400px;
+        }
+
+        #google-signin-button {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-top: 20px;
         }
         
         #mermaid-display {
@@ -501,15 +515,6 @@
                         <span class="sidebar-text">新規作成</span>
                     </div>
                     
-                    <div class="sidebar-item" title="保存 (Ctrl+S)" data-bind="click: saveChart, visible: currentChart">
-                        <div class="sidebar-icon">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
-                            </svg>
-                        </div>
-                        <span class="sidebar-text">保存</span>
-                    </div>
-                    
                     <!-- チャートリスト -->
                     <div class="chart-list" data-bind="visible: savedCharts().length > 0">
                         <div class="chart-list-title">
@@ -549,22 +554,23 @@
 
             <!-- 中央のキャンバス -->
             <div class="canvas-container">
-                <!-- チャートタイトル入力エリア -->
-                <div class="chart-title-bar" data-bind="visible: currentChart">
-                    <input type="text" 
-                           class="chart-title-input" 
-                           placeholder="チャートタイトルを入力..."
-                           data-bind="value: currentChartTitle, valueUpdate: 'input'"
-                           maxlength="100">
-                    <div class="chart-info">
-                        <span data-bind="text: currentChart() && currentChart().id ? '保存済み' : '未保存', 
-                                         css: { 'status-saved': currentChart() && currentChart().id, 'status-unsaved': !currentChart() || !currentChart().id }"></span>
-                        <span data-bind="text: currentChart() && currentChart().updated_at ? '・更新: ' + currentChart().updated_at : ''"></span>
-                    </div>
-                </div>
                 
                 <div class="canvas-content">
                     <div class="chart-canvas" id="chart-canvas" data-bind="event: { drop: onDrop, dragover: allowDrop }">
+                        <!-- チャートタイトル入力エリア -->
+                        <div class="chart-title-container" data-bind="visible: currentChart">
+                            <input type="text" 
+                                   class="chart-title-input" 
+                                   placeholder="チャートタイトルを入力..."
+                                   data-bind="value: currentChartTitle, valueUpdate: 'input'"
+                                   maxlength="100">
+                            <div class="chart-info">
+                                <span data-bind="text: currentChart() && currentChart().id ? '保存済み' : '未保存', 
+                                                 css: { 'status-saved': currentChart() && currentChart().id, 'status-unsaved': !currentChart() || !currentChart().id }"></span>
+                                <span data-bind="text: currentChart() && currentChart().updated_at ? '・更新: ' + currentChart().updated_at : ''"></span>
+                            </div>
+                        </div>
+                        
                         <!-- フローチャート操作ボタン -->
                         <div class="chart-controls">
                             <div class="control-button" title="保存 (Ctrl+S)" data-bind="click: $root.saveChart">
@@ -588,6 +594,11 @@
                                 </svg>
                             </div>
                         </div>
+                        
+                        <!-- エラー・成功メッセージ -->
+                        <div class="error-message" id="error-message" data-bind="visible: errorMessage, text: errorMessage"></div>
+                        <div class="success-message" id="success-message" data-bind="visible: successMessage, text: successMessage"></div>
+                        
                         <div id="mermaid-display" data-bind="html: mermaidHtml"></div>
                     </div>
                 </div>
@@ -595,9 +606,6 @@
 
         </div>
 
-        <!-- エラー・成功メッセージ -->
-        <div class="error-message" id="error-message" data-bind="visible: errorMessage, text: errorMessage"></div>
-        <div class="success-message" id="success-message" data-bind="visible: successMessage, text: successMessage"></div>
         
         <!-- ローディング -->
         <div class="loading" id="loading" data-bind="visible: isLoading">
