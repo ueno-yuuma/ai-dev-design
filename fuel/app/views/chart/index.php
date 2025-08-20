@@ -51,57 +51,93 @@
             background-color: #2c3e50;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
             padding: 20px 0;
             gap: 20px;
+            justify-content: space-between;
+            transition: width 0.3s ease;
+            overflow: hidden;
+            position: relative;
+            z-index: 100;
         }
         
-        .sidebar-icon {
-            width: 32px;
-            height: 32px;
+        .left-sidebar:hover {
+            width: 200px;
+        }
+        
+        .sidebar-top,
+        .sidebar-bottom {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: flex-start;
+            width: 100%;
+            padding: 0 20px;
+        }
+        
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
             color: #ecf0f1;
             cursor: pointer;
             transition: color 0.3s;
+            white-space: nowrap;
+            width: 100%;
+            padding: 8px 0;
         }
         
-        .sidebar-icon:hover {
+        .sidebar-item:hover {
             color: #3498db;
         }
         
-        /* 上部ナビゲーションバー */
-        .top-nav {
+        .sidebar-icon {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+        
+        .sidebar-text {
+            font-size: 14px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .left-sidebar:hover .sidebar-text {
+            opacity: 1;
+        }
+
+        /* 上部ヘッダー */
+        .top-header {
             height: 60px;
             background-color: #ffffff;
             display: flex;
+            justify-content: flex-end;
             align-items: center;
             padding: 0 20px;
-            gap: 15px;
             border-bottom: 1px solid #ddd;
+            position: relative;
+            z-index: 50;
         }
         
-        .nav-tab {
-            padding: 8px 20px;
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 20px;
-            cursor: pointer;
+        .header-icons {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .header-icon {
+            width: 24px;
+            height: 24px;
             color: #495057;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.3s;
-            user-select: none;
+            cursor: pointer;
+            transition: color 0.3s ease;
         }
         
-        .nav-tab:hover {
-            background-color: #e9ecef;
-            border-color: #adb5bd;
+        .header-icon:hover {
+            color: #007bff;
         }
         
-        .nav-tab.active {
-            background-color: #007bff;
-            color: white;
-            border-color: #007bff;
-        }
         
         /* 中央のキャンバス */
         .canvas-container {
@@ -162,60 +198,6 @@
             border-color: #e91e63;
         }
         
-        /* 右側パネル */
-        .right-panel {
-            width: 280px;
-            background-color: #ffffff;
-            border-left: 1px solid #ddd;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .panel-header {
-            height: 50px;
-            background-color: #f8f9fa;
-            border-bottom: 1px solid #ddd;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 15px;
-        }
-        
-        .panel-icons {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .panel-icon {
-            width: 20px;
-            height: 20px;
-            color: #6c757d;
-            cursor: pointer;
-            transition: color 0.3s;
-        }
-        
-        .panel-icon:hover {
-            color: #495057;
-        }
-        
-        .panel-content {
-            padding: 20px;
-            flex: 1;
-        }
-        
-        .title-input {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .title-input:focus {
-            outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
-        }
         
         .btn-primary {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -329,28 +311,51 @@
 
     <!-- メインコンテンツ -->
     <div id="main-content" class="app-container" data-bind="visible: isAuthenticated">
-        <!-- 上部ナビゲーションバー -->
-        <div class="top-nav">
-            <div class="nav-tab active" data-node-type="process">Process</div>
-            <div class="nav-tab" data-node-type="decision">Decision</div>
-            <div class="nav-tab" data-node-type="input">Input</div>
-            <div class="nav-tab" data-node-type="output">Output</div>
+        <!-- 上部ヘッダー -->
+        <div class="top-header">
+            <div class="header-icons">
+                <div class="header-icon" title="インポート" data-bind="click: importChart">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                    </svg>
+                </div>
+                <div class="header-icon" title="エクスポート" data-bind="click: exportChart">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                </div>
+                <div class="header-icon" title="ログアウト" data-bind="click: logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                </div>
+            </div>
         </div>
 
         <!-- メインレイアウト -->
         <div class="main-layout">
             <!-- 左側サイドバー -->
             <div class="left-sidebar">
-                <div class="sidebar-icon" title="新規作成" data-bind="click: createNewChart">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                    </svg>
+                <div class="sidebar-top">
+                    <div class="sidebar-item" title="新規作成" data-bind="click: createNewChart">
+                        <div class="sidebar-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text">新規作成</span>
+                    </div>
                 </div>
-                <div class="sidebar-icon" title="設定" data-bind="click: $root.showSettings">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                <div class="sidebar-bottom">
+                    <div class="sidebar-item" title="設定" data-bind="click: $root.showSettings">
+                        <div class="sidebar-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text">設定</span>
+                    </div>
                 </div>
             </div>
 
@@ -363,28 +368,6 @@
                 </div>
             </div>
 
-            <!-- 右側パネル -->
-            <div class="right-panel">
-                <div class="panel-header">
-                    <span>タイトル</span>
-                    <div class="panel-icons">
-                        <div class="panel-icon" title="最小化">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
-                            </svg>
-                        </div>
-                        <div class="panel-icon" title="メニュー">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
-                            </svg>
-                        </div>
-                    </div>
-                </div>
-                <div class="panel-content">
-                    <input type="text" class="title-input" placeholder="フローチャートのタイトルを入力" 
-                           data-bind="value: currentChartTitle, enable: currentChart">
-                </div>
-            </div>
         </div>
 
         <!-- エラー・成功メッセージ -->
