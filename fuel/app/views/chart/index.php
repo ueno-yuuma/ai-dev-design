@@ -261,34 +261,35 @@
             overflow: hidden;
         }
         
-        /* チャートタイトルバー */
-        .chart-title-bar {
-            background-color: #ffffff;
-            padding: 15px 20px;
-            border-bottom: 1px solid #dee2e6;
+        /* チャートタイトルエリア */
+        .chart-title-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
         }
         
         .chart-title-input {
-            flex: 1;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px 15px;
             font-size: 16px;
             font-weight: 500;
             font-family: 'Noto Sans JP', sans-serif;
-            background-color: #ffffff;
-            transition: all 0.2s ease;
-            max-width: 400px;
+            background-color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            min-width: 300px;
         }
         
         .chart-title-input:focus {
             outline: none;
             border-color: #007bff;
-            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+            background-color: white;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
         
         .chart-title-input::placeholder {
@@ -299,17 +300,20 @@
         .chart-info {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 13px;
+            gap: 8px;
+            font-size: 12px;
             color: #6c757d;
-            margin-left: 15px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 6px 12px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         .chart-info span:first-child {
             font-weight: 500;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
             text-transform: uppercase;
         }
         
@@ -556,22 +560,23 @@
 
             <!-- 中央のキャンバス -->
             <div class="canvas-container">
-                <!-- チャートタイトル入力エリア -->
-                <div class="chart-title-bar" data-bind="visible: currentChart">
-                    <input type="text" 
-                           class="chart-title-input" 
-                           placeholder="チャートタイトルを入力..."
-                           data-bind="value: currentChartTitle, valueUpdate: 'input'"
-                           maxlength="100">
-                    <div class="chart-info">
-                        <span data-bind="text: currentChart() && currentChart().id ? '保存済み' : '未保存', 
-                                         css: { 'status-saved': currentChart() && currentChart().id, 'status-unsaved': !currentChart() || !currentChart().id }"></span>
-                        <span data-bind="text: currentChart() && currentChart().updated_at ? '・更新: ' + currentChart().updated_at : ''"></span>
-                    </div>
-                </div>
                 
                 <div class="canvas-content">
                     <div class="chart-canvas" id="chart-canvas" data-bind="event: { drop: onDrop, dragover: allowDrop }">
+                        <!-- チャートタイトル入力エリア -->
+                        <div class="chart-title-container" data-bind="visible: currentChart">
+                            <input type="text" 
+                                   class="chart-title-input" 
+                                   placeholder="チャートタイトルを入力..."
+                                   data-bind="value: currentChartTitle, valueUpdate: 'input'"
+                                   maxlength="100">
+                            <div class="chart-info">
+                                <span data-bind="text: currentChart() && currentChart().id ? '保存済み' : '未保存', 
+                                                 css: { 'status-saved': currentChart() && currentChart().id, 'status-unsaved': !currentChart() || !currentChart().id }"></span>
+                                <span data-bind="text: currentChart() && currentChart().updated_at ? '・更新: ' + currentChart().updated_at : ''"></span>
+                            </div>
+                        </div>
+                        
                         <!-- フローチャート操作ボタン -->
                         <div class="chart-controls">
                             <div class="control-button" title="保存 (Ctrl+S)" data-bind="click: $root.saveChart">
