@@ -107,34 +107,44 @@
             opacity: 1;
         }
 
-        /* 上部ヘッダー */
-        .top-header {
-            height: 60px;
-            background-color: #ffffff;
-            display: flex;
-            justify-content: flex-end;
-            align-items: center;
-            padding: 0 20px;
-            border-bottom: 1px solid #ddd;
-            position: relative;
-            z-index: 50;
-        }
-        
-        .header-icons {
+        /* フローチャート操作ボタン */
+        .chart-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
             display: flex;
             gap: 15px;
-            align-items: center;
+            z-index: 10;
         }
         
-        .header-icon {
-            width: 24px;
-            height: 24px;
-            color: #495057;
+        .control-button {
+            width: 40px;
+            height: 40px;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .control-button:hover {
+            background-color: white;
+            border-color: #007bff;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .control-button svg {
+            width: 20px;
+            height: 20px;
+            color: #495057;
             transition: color 0.3s ease;
         }
         
-        .header-icon:hover {
+        .control-button:hover svg {
             color: #007bff;
         }
         
@@ -311,26 +321,6 @@
 
     <!-- メインコンテンツ -->
     <div id="main-content" class="app-container" data-bind="visible: isAuthenticated">
-        <!-- 上部ヘッダー -->
-        <div class="top-header">
-            <div class="header-icons">
-                <div class="header-icon" title="インポート" data-bind="click: $root.importChart">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-                    </svg>
-                </div>
-                <div class="header-icon" title="エクスポート" data-bind="click: $root.exportChart">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                    </svg>
-                </div>
-                <div class="header-icon" title="ログアウト" data-bind="click: $root.logout">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                </div>
-            </div>
-        </div>
 
         <!-- メインレイアウト -->
         <div class="main-layout">
@@ -363,6 +353,24 @@
             <div class="canvas-container">
                 <div class="canvas-content">
                     <div class="chart-canvas" id="chart-canvas" data-bind="event: { drop: onDrop, dragover: allowDrop }">
+                        <!-- フローチャート操作ボタン -->
+                        <div class="chart-controls">
+                            <div class="control-button" title="インポート" data-bind="click: $root.importChart">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                                </svg>
+                            </div>
+                            <div class="control-button" title="エクスポート" data-bind="click: $root.exportChart">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                            </div>
+                            <div class="control-button" title="ログアウト" data-bind="click: $root.logout">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                                </svg>
+                            </div>
+                        </div>
                         <div id="mermaid-display" data-bind="html: mermaidHtml"></div>
                     </div>
                 </div>
