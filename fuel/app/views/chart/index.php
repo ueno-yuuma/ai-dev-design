@@ -21,7 +21,7 @@
     <script src="https://cdn.jsdelivr.net/npm/interactjs@1.10.17/dist/interact.min.js"></script>
     
     <!-- Google Identity Services API -->
-    <script src="https://accounts.google.com/gsi/client" onload="console.log('Google GSI loaded')" async defer></script>
+    <script src="https://accounts.google.com/gsi/client" async onload="console.log('Google GSI client loaded')"></script>
     
     <style>
         body {
