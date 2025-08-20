@@ -101,12 +101,23 @@ function ChartViewModel() {
         const user = localStorage.getItem('user_info');
         
         if (token && user) {
-            authToken = token;
-            currentUser = JSON.parse(user);
-            self.isAuthenticated(true);
-            self.userName(currentUser.name);
-            self.userEmail(currentUser.email);
-            self.loadCharts();
+            try {
+                authToken = token;
+                currentUser = JSON.parse(user);
+                self.isAuthenticated(true);
+                self.userName(currentUser.name);
+                self.userEmail(currentUser.email);
+                
+                // 認証済みの場合のみチャート読み込み
+                setTimeout(() => {
+                    self.loadCharts();
+                }, 100);
+            } catch (error) {
+                console.error('Error parsing stored user info:', error);
+                // エラーの場合は保存データをクリア
+                localStorage.removeItem('google_id_token');
+                localStorage.removeItem('user_info');
+            }
         }
     };
     
@@ -555,40 +566,57 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            google.accounts.id.initialize({
-                client_id: window.GOOGLE_CLIENT_ID,
-                callback: handleCredentialResponse,
-                auto_select: false,
-                cancel_on_tap_outside: true
-            });
-            
-            // 認証ボタンをレンダリング（1つのボタンのみ）
-            const authButton = document.getElementById('google-signin-button');
-            if (authButton && !authButton.hasAttribute('data-rendered')) {
-                google.accounts.id.renderButton(authButton, {
-                    theme: authButton.dataset.theme || 'filled_blue',
-                    size: authButton.dataset.size || 'large',
-                    type: authButton.dataset.type || 'standard',
-                    width: 280
+            try {
+                // 初期化を先に実行
+                google.accounts.id.initialize({
+                    client_id: window.GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
                 });
-                authButton.setAttribute('data-rendered', 'true');
+                
+                console.log('Google Auth initialized successfully');
+                
+                // 初期化完了後にボタンをレンダリング
+                setTimeout(() => {
+                    const authButton = document.getElementById('google-signin-button');
+                    if (authButton && !authButton.hasAttribute('data-rendered')) {
+                        try {
+                            google.accounts.id.renderButton(authButton, {
+                                theme: authButton.dataset.theme || 'filled_blue',
+                                size: authButton.dataset.size || 'large',
+                                type: authButton.dataset.type || 'standard',
+                                width: 280
+                            });
+                            authButton.setAttribute('data-rendered', 'true');
+                            console.log('Google Auth button rendered successfully');
+                        } catch (renderError) {
+                            console.error('Failed to render Google Auth button:', renderError);
+                        }
+                    }
+                }, 300);
+                
+            } catch (initError) {
+                console.error('Failed to initialize Google Auth:', initError);
             }
-            
-            console.log('Google Auth initialized successfully');
         } else {
             console.error('Google Identity Services not loaded');
         }
     }
     
     // Google APIの読み込み完了を待つ
-    if (typeof google !== 'undefined') {
-        initializeGoogleAuth();
-    } else {
-        // Google APIの読み込みを待つ
-        window.addEventListener('load', () => {
-            setTimeout(initializeGoogleAuth, 500);
-        });
+    function waitForGoogleAuth() {
+        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+            initializeGoogleAuth();
+        } else {
+            setTimeout(waitForGoogleAuth, 100);
+        }
     }
+    
+    // ページ読み込み後にGoogle認証を初期化
+    window.addEventListener('load', () => {
+        setTimeout(waitForGoogleAuth, 200);
+    });
     
     // キーボードショートカット
     document.addEventListener('keydown', function(e) {
