@@ -2,18 +2,15 @@
 
 /**
  * Google OAuth 2.0 Configuration
- * secrets/google_oauth_client.json から設定を読み込み
+ * .env ファイルから設定を読み込み
  */
-
-// 基本設定（一部の機能で使用）
-$oauth_config = array();
 
 return array(
     /**
-     * Google OAuth 2.0 設定（JSONファイルから読み込み）
+     * Google OAuth 2.0 Client ID
+     * .env の GOOGLE_CLIENT_ID から読み込まれます
      */
-    'client_id' => isset($oauth_config['client_id']) ? $oauth_config['client_id'] : null,
-    'client_secret' => isset($oauth_config['client_secret']) ? $oauth_config['client_secret'] : null,
+    'client_id' => Env::get('GOOGLE_CLIENT_ID'),
     'auth_uri' => 'https://accounts.google.com/o/oauth2/auth',
     'token_uri' => 'https://oauth2.googleapis.com/token',
     'redirect_uris' => array(),
