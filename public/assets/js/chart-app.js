@@ -13,7 +13,10 @@ const API_BASE = '/api';
 const API_ENDPOINTS = {
     health: `${API_BASE}/health`,
     charts: `${API_BASE}/charts`,
-    chart: (id) => `${API_BASE}/chart/${id}`
+    chart: (id) => `${API_BASE}/chart/${id}`,
+    login: `${API_BASE}/login`,
+    logout: `${API_BASE}/logout`,
+    authStatus: `${API_BASE}/status`
 };
 
 // Mermaid初期化
@@ -97,83 +100,124 @@ function ChartViewModel() {
     
     // 認証状態チェック
     self.checkAuthStatus = function() {
-        const token = localStorage.getItem('google_id_token');
-        const user = localStorage.getItem('user_info');
-        
-        if (token && user) {
-            try {
-                authToken = token;
-                currentUser = JSON.parse(user);
+        // Check authentication status from server
+        fetch(API_ENDPOINTS.authStatus, {
+            method: 'GET',
+            credentials: 'include' // Include cookies
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.authenticated && data.user) {
                 self.isAuthenticated(true);
-                self.userName(currentUser.name);
-                self.userEmail(currentUser.email);
+                self.userName(data.user.name);
+                self.userEmail(data.user.email);
+                currentUser = data.user;
                 
-                // 認証済みの場合のみチャート読み込み
+                // Load charts after authentication confirmed
                 setTimeout(() => {
                     self.loadCharts();
                 }, 100);
-            } catch (error) {
-                console.error('Error parsing stored user info:', error);
-                // エラーの場合は保存データをクリア
-                localStorage.removeItem('google_id_token');
-                localStorage.removeItem('user_info');
+            } else {
+                self.isAuthenticated(false);
+                self.userName('');
+                self.userEmail('');
+                currentUser = null;
             }
-        }
+        })
+        .catch(error => {
+            console.error('Error checking auth status:', error);
+            self.isAuthenticated(false);
+            self.userName('');
+            self.userEmail('');
+            currentUser = null;
+        });
     };
     
     // Google Identity Services コールバック
     window.handleCredentialResponse = function(response) {
-        // JWTトークンをデコード（簡易版）
-        const payload = JSON.parse(atob(response.credential.split('.')[1]));
-        
-        currentUser = {
-            id: payload.sub,
-            name: payload.name,
-            email: payload.email,
-            picture: payload.picture
-        };
-        
-        authToken = response.credential;
-        
-        // ローカルストレージに保存
-        localStorage.setItem('google_id_token', authToken);
-        localStorage.setItem('user_info', JSON.stringify(currentUser));
-        
-        self.isAuthenticated(true);
-        self.userName(currentUser.name);
-        self.userEmail(currentUser.email);
-        
-        self.loadCharts();
-        self.showSuccess('ログインしました');
+        // Send credential to server for verification
+        fetch(API_ENDPOINTS.login, {
+            method: 'POST',
+            credentials: 'include', // Include cookies
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                credential: response.credential
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.user) {
+                currentUser = data.user;
+                
+                self.isAuthenticated(true);
+                self.userName(currentUser.name);
+                self.userEmail(currentUser.email);
+                
+                self.loadCharts();
+                self.showSuccess('ログインしました');
+            } else {
+                self.showError('ログインに失敗しました: ' + (data.error || '不明なエラー'));
+            }
+        })
+        .catch(error => {
+            console.error('Login error:', error);
+            self.showError('ログインに失敗しました');
+        });
     };
     
     // サインアウト
     window.signOut = function() {
-        google.accounts.id.disableAutoSelect();
-        
-        currentUser = null;
-        authToken = null;
-        localStorage.removeItem('google_id_token');
-        localStorage.removeItem('user_info');
-        
-        self.isAuthenticated(false);
-        self.userName('');
-        self.userEmail('');
-        self.savedCharts([]);
-        self.currentChart(null);
-        self.showSuccess('ログアウトしました');
-        
-        // ページをリロードして認証状態をリセット
-        setTimeout(() => location.reload(), 1000);
+        fetch(API_ENDPOINTS.logout, {
+            method: 'POST',
+            credentials: 'include'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                google.accounts.id.disableAutoSelect();
+                
+                currentUser = null;
+                authToken = null;
+                
+                self.isAuthenticated(false);
+                self.userName('');
+                self.userEmail('');
+                self.savedCharts([]);
+                self.currentChart(null);
+                self.showSuccess('ログアウトしました');
+                
+                // ページをリロードして認証状態をリセット
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                self.showError('ログアウトに失敗しました');
+            }
+        })
+        .catch(error => {
+            console.error('Logout error:', error);
+            // Even if server logout fails, clear client state
+            google.accounts.id.disableAutoSelect();
+            currentUser = null;
+            authToken = null;
+            
+            self.isAuthenticated(false);
+            self.userName('');
+            self.userEmail('');
+            self.savedCharts([]);
+            self.currentChart(null);
+            
+            setTimeout(() => location.reload(), 1000);
+        });
     };
     
     // API呼び出しヘルパー
     self.apiCall = function(url, options = {}) {
         const defaultOptions = {
             headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            }
+                'Content-Type': 'application/json'
+            },
+            credentials: 'include' // Include cookies for authentication
         };
         
         const mergedOptions = {
@@ -188,6 +232,14 @@ function ChartViewModel() {
         return fetch(url, mergedOptions)
             .then(response => {
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        // Unauthorized - redirect to login
+                        self.isAuthenticated(false);
+                        self.userName('');
+                        self.userEmail('');
+                        currentUser = null;
+                        throw new Error('認証が必要です。再度ログインしてください。');
+                    }
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 return response.json();
@@ -552,20 +604,37 @@ function ChartViewModel() {
         if (typeof signOut === 'function') {
             signOut();
         } else {
-            // フォールバック
-            currentUser = null;
-            authToken = null;
-            localStorage.removeItem('google_id_token');
-            localStorage.removeItem('user_info');
-            
-            self.isAuthenticated(false);
-            self.userName('');
-            self.userEmail('');
-            self.savedCharts([]);
-            self.currentChart(null);
-            self.showSuccess('ログアウトしました');
-            
-            setTimeout(() => location.reload(), 1000);
+            // フォールバック - サーバーサイドログアウトを試行
+            fetch(API_ENDPOINTS.logout, {
+                method: 'POST',
+                credentials: 'include'
+            })
+            .then(() => {
+                currentUser = null;
+                authToken = null;
+                
+                self.isAuthenticated(false);
+                self.userName('');
+                self.userEmail('');
+                self.savedCharts([]);
+                self.currentChart(null);
+                self.showSuccess('ログアウトしました');
+                
+                setTimeout(() => location.reload(), 1000);
+            })
+            .catch(() => {
+                // Even if server logout fails, clear client state
+                currentUser = null;
+                authToken = null;
+                
+                self.isAuthenticated(false);
+                self.userName('');
+                self.userEmail('');
+                self.savedCharts([]);
+                self.currentChart(null);
+                
+                setTimeout(() => location.reload(), 1000);
+            });
         }
     };
     
