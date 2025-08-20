@@ -21,7 +21,7 @@ class Model_Auth extends \Model
     }
     
     /**
-     * Verify Google ID Token
+     * Verify Google ID Token using Google API Client Library (Official & Best Practice)
      * 
      * @param string $id_token Google ID Token
      * @return array|false User data if valid, false if invalid
@@ -41,8 +41,8 @@ class Model_Auth extends \Model
         \Log::info('Auth: Attempting to verify token with backend Client ID: ' . static::$google_client_id);
 
         try {
-            $client = new \Google_Client(['client_id' => static::$google_client_id]);
-            $payload = $client->verifyIdToken($id_token);
+            // Google API Client Libraryを使用してトークンを検証
+            $payload = static::verify_with_google_client($id_token, static::$google_client_id);
             
             if ($payload) {
                 \Log::info('Auth: Token successfully verified for email: ' . $payload['email']);
@@ -55,12 +55,11 @@ class Model_Auth extends \Model
                 );
                 return $user_data;
             } else {
-                \Log::warning('Auth: Token verification failed. verifyIdToken returned false. This may be due to an expired token or invalid signature.');
+                \Log::warning('Auth: Token verification failed.');
                 return false;
             }
             
         } catch (\Exception $e) {
-            // Google_Client's verifyIdToken throws exceptions for specific failures like audience mismatch.
             \Log::error('Auth: Exception during token verification: ' . $e->getMessage());
             return false;
         }
@@ -139,4 +138,49 @@ class Model_Auth extends \Model
             return false;
         }
     }
+    
+    /**
+     * Verify Google ID Token using Google API Client Library (Official Method)
+     * 
+     * @param string $id_token Google ID Token
+     * @param string $client_id Expected client ID
+     * @return array|false Payload if valid, false otherwise
+     */
+    protected static function verify_with_google_client($id_token, $client_id)
+    {
+        try {
+            // Google API Clientライブラリの確認とロード
+            if (!class_exists('Google_Client')) {
+                // Composerのautoloaderが読み込まれていない場合
+                if (file_exists(VENDORPATH . 'autoload.php')) {
+                    require_once VENDORPATH . 'autoload.php';
+                } else {
+                    \Log::error('Auth: Google API Client library not found. Run composer install.');
+                    return false;
+                }
+            }
+            
+            // Google Clientを初期化
+            $client = new \Google_Client(['client_id' => $client_id]);
+            
+            // ID Tokenを検証（これだけで完全な検証が行われる）
+            $payload = $client->verifyIdToken($id_token);
+            
+            if ($payload) {
+                \Log::info('Auth: Token successfully verified using Google API Client');
+                return $payload;
+            } else {
+                \Log::warning('Auth: Token verification failed - verifyIdToken returned false');
+                return false;
+            }
+            
+        } catch (\Google_Service_Exception $e) {
+            \Log::error('Auth: Google Service Exception: ' . $e->getMessage());
+            return false;
+        } catch (\Exception $e) {
+            \Log::error('Auth: Exception during Google Client verification: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
 }
