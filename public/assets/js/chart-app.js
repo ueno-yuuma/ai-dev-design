@@ -21,13 +21,25 @@ function initializeMermaid() {
     if (!mermaidInitialized) {
         mermaid.initialize({
             startOnLoad: false,
-            theme: 'default',
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#b8e6b8',
+                primaryTextColor: '#333',
+                primaryBorderColor: '#4caf50',
+                lineColor: '#666',
+                secondaryColor: '#cce7ff',
+                tertiaryColor: '#ffe6cc',
+                background: '#e5e5e5',
+                mainBkg: '#ffffff',
+                secondBkg: '#f8f9fa'
+            },
             securityLevel: 'loose',
             fontFamily: 'Noto Sans JP, sans-serif',
             flowchart: {
                 useMaxWidth: true,
                 htmlLabels: true,
-                curve: 'basis'
+                curve: 'basis',
+                padding: 20
             }
         });
         mermaidInitialized = true;
@@ -79,6 +91,7 @@ function ChartViewModel() {
         initializeMermaid();
         self.checkAuthStatus();
         self.setupDragAndDrop();
+        self.setupNavTabs();
         self.renderMermaid();
     };
     
@@ -88,12 +101,23 @@ function ChartViewModel() {
         const user = localStorage.getItem('user_info');
         
         if (token && user) {
-            authToken = token;
-            currentUser = JSON.parse(user);
-            self.isAuthenticated(true);
-            self.userName(currentUser.name);
-            self.userEmail(currentUser.email);
-            self.loadCharts();
+            try {
+                authToken = token;
+                currentUser = JSON.parse(user);
+                self.isAuthenticated(true);
+                self.userName(currentUser.name);
+                self.userEmail(currentUser.email);
+                
+                // 認証済みの場合のみチャート読み込み
+                setTimeout(() => {
+                    self.loadCharts();
+                }, 100);
+            } catch (error) {
+                console.error('Error parsing stored user info:', error);
+                // エラーの場合は保存データをクリア
+                localStorage.removeItem('google_id_token');
+                localStorage.removeItem('user_info');
+            }
         }
     };
     
@@ -359,20 +383,16 @@ function ChartViewModel() {
         }
     };
     
+    // ナビゲーションタブ設定（削除されたタブ用の空関数）
+    self.setupNavTabs = function() {
+        console.log('Navigation tabs have been removed from UI');
+        // Process, Decision, Input, Output tabs were removed
+        // This function is kept for compatibility but does nothing
+    };
+    
     // ドラッグ&ドロップ設定
     self.setupDragAndDrop = function() {
-        // ノードパレットからのドラッグ
-        const nodeTypes = document.querySelectorAll('.node-type');
-        nodeTypes.forEach(node => {
-            node.addEventListener('dragstart', function(e) {
-                e.dataTransfer.setData('text/plain', this.dataset.nodeType);
-                this.classList.add('dragging');
-            });
-            
-            node.addEventListener('dragend', function(e) {
-                this.classList.remove('dragging');
-            });
-        });
+        // タブからのドラッグは上記のsetupNavTabsで処理
     };
     
     // ドロップ許可
@@ -424,6 +444,11 @@ function ChartViewModel() {
             'output': '出力'
         };
         return typeMap[nodeType] || '処理';
+    };
+    
+    // 設定表示
+    self.showSettings = function() {
+        self.showError('設定機能は実装予定です');
     };
     
     // ノード詳細化（AI機能）
@@ -482,6 +507,68 @@ function ChartViewModel() {
         
         self.showSuccess('チャートをエクスポートしました');
     };
+
+    // インポート
+    self.importChart = function() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (data.title && data.mermaidCode) {
+                            const importedChart = {
+                                id: null,
+                                title: data.title + ' (インポート)',
+                                content: data.mermaidCode,
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString()
+                            };
+                            
+                            self.currentChart(importedChart);
+                            self.currentChartTitle(importedChart.title);
+                            self.currentMermaidCode(importedChart.content);
+                            self.addToHistory();
+                            self.renderMermaid();
+                            self.showSuccess('チャートをインポートしました');
+                        } else {
+                            self.showError('無効なファイル形式です');
+                        }
+                    } catch (error) {
+                        self.showError('ファイルの読み込みに失敗しました');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        };
+        input.click();
+    };
+
+    // ログアウト
+    self.logout = function() {
+        if (typeof signOut === 'function') {
+            signOut();
+        } else {
+            // フォールバック
+            currentUser = null;
+            authToken = null;
+            localStorage.removeItem('google_id_token');
+            localStorage.removeItem('user_info');
+            
+            self.isAuthenticated(false);
+            self.userName('');
+            self.userEmail('');
+            self.savedCharts([]);
+            self.currentChart(null);
+            self.showSuccess('ログアウトしました');
+            
+            setTimeout(() => location.reload(), 1000);
+        }
+    };
     
     // コードからの更新
     self.updateFromCode = function() {
@@ -516,50 +603,149 @@ document.addEventListener('DOMContentLoaded', function() {
     ko.applyBindings(viewModel);
     viewModel.initialize();
     
-    // Google Identity Services初期化（DOMContentLoaded後に実行）
-    function initializeGoogleAuth() {
-        console.log('Initializing Google Auth with Client ID:', window.GOOGLE_CLIENT_ID);
+    // Promise-based Google Script Loader（改良版）
+    function loadGoogleScript() {
+        return new Promise((resolve, reject) => {
+            console.log('Starting Google Script loading process');
+            
+            // 既にAPIが利用可能な場合
+            if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                console.log('Google API already available');
+                resolve();
+                return;
+            }
+            
+            // 既にスクリプトが読み込まれているかチェック
+            let existingScript = document.querySelector('script[src*="accounts.google.com/gsi/client"]');
+            
+            if (existingScript) {
+                console.log('Google script already exists, waiting for API...');
+                // 既存のスクリプトがある場合、APIが利用可能になるまで待機
+                let attempts = 0;
+                const maxAttempts = 50; // 5秒間待機
+                
+                const checkAPI = () => {
+                    attempts++;
+                    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                        console.log('Google API became available');
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        reject(new Error('Google API did not become available after waiting'));
+                    } else {
+                        setTimeout(checkAPI, 100);
+                    }
+                };
+                
+                checkAPI();
+                return;
+            }
+            
+            console.log('Creating new Google script element');
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            
+            script.onload = () => {
+                console.log('Google GSI script onload fired');
+                
+                // スクリプト読み込み後、APIが利用可能になるまで待機
+                let attempts = 0;
+                const maxAttempts = 50;
+                
+                const checkAPI = () => {
+                    attempts++;
+                    console.log(`Checking Google API availability (attempt ${attempts})`);
+                    
+                    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+                        console.log('Google API is now available');
+                        resolve();
+                    } else if (attempts >= maxAttempts) {
+                        console.error('Google API not available after maximum attempts');
+                        reject(new Error('Google API not available after script load'));
+                    } else {
+                        setTimeout(checkAPI, 100);
+                    }
+                };
+                
+                checkAPI();
+            };
+            
+            script.onerror = (error) => {
+                console.error('Failed to load Google GSI client script:', error);
+                reject(new Error('Script loading failed'));
+            };
+            
+            console.log('Appending Google script to document head');
+            document.head.appendChild(script);
+        });
+    }
+    
+    // Google Sign-In 初期化と描画
+    function initializeGoogleSignIn() {
+        console.log('Initializing Google Sign-In with Client ID:', window.GOOGLE_CLIENT_ID);
         
         if (!window.GOOGLE_CLIENT_ID || window.GOOGLE_CLIENT_ID === '') {
             console.error('Google Client ID is not set');
-            return;
+            return Promise.reject(new Error('Client ID not set'));
         }
         
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            google.accounts.id.initialize({
-                client_id: window.GOOGLE_CLIENT_ID,
-                callback: handleCredentialResponse,
-                auto_select: false,
-                cancel_on_tap_outside: true
-            });
-            
-            // 認証ボタンをレンダリング（1つのボタンのみ）
-            const authButton = document.getElementById('google-signin-button');
-            if (authButton && !authButton.hasAttribute('data-rendered')) {
-                google.accounts.id.renderButton(authButton, {
-                    theme: authButton.dataset.theme || 'filled_blue',
-                    size: authButton.dataset.size || 'large',
-                    type: authButton.dataset.type || 'standard',
-                    width: 280
+        return loadGoogleScript()
+            .then(() => {
+                // 初期化
+                google.accounts.id.initialize({
+                    client_id: window.GOOGLE_CLIENT_ID,
+                    callback: handleCredentialResponse,
+                    auto_select: false,
+                    cancel_on_tap_outside: true
                 });
-                authButton.setAttribute('data-rendered', 'true');
-            }
-            
-            console.log('Google Auth initialized successfully');
-        } else {
-            console.error('Google Identity Services not loaded');
-        }
+                
+                console.log('Google Identity Services initialized successfully');
+                
+                // ボタン描画
+                const buttonDiv = document.getElementById('google-signin-button');
+                if (buttonDiv) {
+                    google.accounts.id.renderButton(buttonDiv, {
+                        theme: 'filled_blue',
+                        size: 'large',
+                        type: 'standard',
+                        width: 280
+                    });
+                    console.log('Google Sign-In button rendered successfully');
+                } else {
+                    throw new Error('Button container not found');
+                }
+            })
+            .catch(error => {
+                console.error('Google Sign-In setup failed:', error);
+            });
     }
     
-    // Google APIの読み込み完了を待つ
-    if (typeof google !== 'undefined') {
-        initializeGoogleAuth();
-    } else {
-        // Google APIの読み込みを待つ
-        window.addEventListener('load', () => {
-            setTimeout(initializeGoogleAuth, 500);
-        });
+    // Google Sign-Inの初期化を遅延実行
+    function delayedGoogleSignInInit() {
+        console.log('Attempting delayed Google Sign-In initialization');
+        initializeGoogleSignIn()
+            .catch(error => {
+                console.warn('First attempt failed, retrying...', error);
+                // 失敗した場合は再試行
+                setTimeout(() => {
+                    initializeGoogleSignIn()
+                        .catch(retryError => {
+                            console.error('Google Sign-In initialization failed after retry:', retryError);
+                        });
+                }, 2000);
+            });
     }
+    
+    // 複数のタイミングで初期化を試行
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, scheduling Google Sign-In initialization');
+        setTimeout(delayedGoogleSignInInit, 1000);
+    });
+    
+    window.addEventListener('load', () => {
+        console.log('Window loaded, scheduling Google Sign-In initialization');
+        setTimeout(delayedGoogleSignInInit, 1500);
+    });
     
     // キーボードショートカット
     document.addEventListener('keydown', function(e) {
