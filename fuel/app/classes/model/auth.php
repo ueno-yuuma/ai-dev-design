@@ -75,11 +75,11 @@ class Model_Auth extends \Model
     public static function extract_token_from_header()
     {
         // FuelPHPのInput::headers()を使用
-        $auth_header = \Input::headers('Authorization');
+        $auth_header_value = \Input::header('Authorization');
         
-        if ($auth_header) {
+        if ($auth_header_value) {
             // Expected format: "Bearer <token>"
-            if (preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
+            if (preg_match('/Bearer\s+(.*)$/i', $auth_header_value, $matches)) {
                 return $matches[1];
             }
         }
