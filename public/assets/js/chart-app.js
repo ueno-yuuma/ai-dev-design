@@ -94,6 +94,8 @@ function ChartViewModel() {
     self.selectedNodeId = ko.observable(null);
     self.selectedNodeElement = null;
     self.contextMenuVisible = ko.observable(false);
+    self.isInlineEditing = ko.observable(false);
+    self.inlineEditorType = null; // 'text' or 'type'
     
     // 操作履歴（Undo/Redo）
     self.history = [];
@@ -442,6 +444,11 @@ function ChartViewModel() {
     
     // マウスホイールでズーム
     self.handleWheel = function(e) {
+        // インライン編集中はズームを無効にする
+        if (self.isInlineEditing()) {
+            return;
+        }
+        
         e.preventDefault();
         e.stopPropagation();
         
@@ -455,6 +462,11 @@ function ChartViewModel() {
     
     // マウスダウン（パン開始）
     self.handleMouseDown = function(e) {
+        // インライン編集中はパンを無効にする
+        if (self.isInlineEditing()) {
+            return;
+        }
+        
         if (e.button === 0) { // Left mouse button
             self.isDragging(true);
             self.lastMousePos = { x: e.clientX, y: e.clientY };
@@ -758,78 +770,218 @@ function ChartViewModel() {
         self.showError('AI最適化機能は実装予定です');
     };
     
-    // コンテキストメニュー機能
+    // インライン編集機能
     
-    // ノード編集
-    self.editNode = function() {
-        if (!self.selectedNodeId()) {
+    // インラインテキスト編集開始
+    self.startInlineTextEdit = function() {
+        if (!self.selectedNodeId() || !self.selectedNodeElement) {
             self.showError('編集するノードが選択されていません');
             return;
         }
         
-        const currentText = self.getNodeText(self.selectedNodeId());
-        const newText = prompt('ノードのテキストを入力してください:', currentText);
+        self.hideContextMenu();
+        self.startInlineEditor('text');
+    };
+    
+    // インライン種類変更開始
+    self.startInlineTypeChange = function() {
+        if (!self.selectedNodeId() || !self.selectedNodeElement) {
+            self.showError('変更するノードが選択されていません');
+            return;
+        }
         
-        if (newText !== null && newText.trim() !== '' && newText !== currentText) {
-            self.updateNodeText(self.selectedNodeId(), newText.trim());
-            self.hideContextMenu();
+        self.hideContextMenu();
+        self.startInlineEditor('type');
+    };
+    
+    // インライン編集器を開始
+    self.startInlineEditor = function(type) {
+        if (self.isInlineEditing()) {
+            self.finishInlineEdit();
+        }
+        
+        self.isInlineEditing(true);
+        self.inlineEditorType = type;
+        
+        // ノードの位置を取得
+        const nodeRect = self.getNodeBounds(self.selectedNodeElement);
+        if (!nodeRect) return;
+        
+        if (type === 'text') {
+            self.showInlineTextEditor(nodeRect);
+        } else if (type === 'type') {
+            self.showInlineTypeSelector(nodeRect);
+        }
+        
+        // 編集中のスタイルを適用
+        self.selectedNodeElement.classList.add('editing');
+    };
+    
+    // インラインテキストエディター表示
+    self.showInlineTextEditor = function(nodeRect) {
+        const editor = document.getElementById('inline-text-editor');
+        if (!editor) return;
+        
+        const currentText = self.getNodeText(self.selectedNodeId());
+        editor.value = currentText;
+        
+        // 位置設定
+        const canvasRect = document.getElementById('mermaid-display').getBoundingClientRect();
+        editor.style.left = (canvasRect.left + nodeRect.centerX - 50) + 'px';
+        editor.style.top = (canvasRect.top + nodeRect.centerY - 10) + 'px';
+        editor.style.display = 'block';
+        
+        // フォーカスして選択
+        setTimeout(() => {
+            editor.focus();
+            editor.select();
+        }, 0);
+        
+        // イベントリスナー設定
+        editor.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                self.finishTextEdit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                self.cancelInlineEdit();
+            }
+        };
+        
+        editor.onblur = function() {
+            setTimeout(() => self.finishTextEdit(), 100);
+        };
+    };
+    
+    // インライン種類選択表示
+    self.showInlineTypeSelector = function(nodeRect) {
+        const selector = document.getElementById('inline-type-selector');
+        if (!selector) return;
+        
+        // 現在の種類を取得
+        const currentNodeInfo = self.getNodeInfo(self.selectedNodeId());
+        const currentType = currentNodeInfo ? currentNodeInfo.shape : 'rect';
+        
+        // 現在の種類をハイライト
+        selector.querySelectorAll('.type-option').forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.type === currentType) {
+                option.classList.add('selected');
+            }
+        });
+        
+        // 位置設定
+        const canvasRect = document.getElementById('mermaid-display').getBoundingClientRect();
+        selector.style.left = (canvasRect.left + nodeRect.centerX - 80) + 'px';
+        selector.style.top = (canvasRect.top + nodeRect.centerY + 20) + 'px';
+        selector.style.display = 'block';
+        
+        // クリックイベント設定
+        selector.querySelectorAll('.type-option').forEach(option => {
+            option.onclick = function() {
+                const newType = this.dataset.type;
+                if (newType !== currentType) {
+                    self.changeNodeShape(self.selectedNodeId(), newType);
+                    self.showSuccess('ノードの種類を変更しました');
+                }
+                self.finishInlineEdit();
+            };
+        });
+        
+        // 外部クリックで閉じる
+        setTimeout(() => {
+            document.addEventListener('click', self.handleInlineEditorOutsideClick);
+        }, 0);
+    };
+    
+    // ノードの境界を取得
+    self.getNodeBounds = function(nodeElement) {
+        try {
+            const rect = nodeElement.getBoundingClientRect();
+            const canvasRect = document.getElementById('mermaid-display').getBoundingClientRect();
+            
+            return {
+                centerX: rect.left + rect.width / 2 - canvasRect.left,
+                centerY: rect.top + rect.height / 2 - canvasRect.top,
+                width: rect.width,
+                height: rect.height
+            };
+        } catch (error) {
+            console.error('Error getting node bounds:', error);
+            return null;
+        }
+    };
+    
+    // テキスト編集完了
+    self.finishTextEdit = function() {
+        const editor = document.getElementById('inline-text-editor');
+        if (!editor || editor.style.display === 'none') return;
+        
+        const newText = editor.value.trim();
+        const currentText = self.getNodeText(self.selectedNodeId());
+        
+        if (newText && newText !== currentText) {
+            self.updateNodeText(self.selectedNodeId(), newText);
             self.showSuccess('ノードのテキストを更新しました');
         }
+        
+        self.finishInlineEdit();
     };
     
-    // ノード複製
-    self.duplicateNode = function() {
-        if (!self.selectedNodeId()) {
-            self.showError('複製するノードが選択されていません');
-            return;
+    // インライン編集完了
+    self.finishInlineEdit = function() {
+        // エディターを非表示
+        const textEditor = document.getElementById('inline-text-editor');
+        const typeSelector = document.getElementById('inline-type-selector');
+        
+        if (textEditor) {
+            textEditor.style.display = 'none';
+            textEditor.onkeydown = null;
+            textEditor.onblur = null;
         }
         
-        const nodeInfo = self.getNodeInfo(self.selectedNodeId());
-        if (nodeInfo) {
-            const newNodeId = 'node_' + Date.now();
-            self.addNodeToMermaidCode(newNodeId, nodeInfo.text + ' (コピー)', nodeInfo.shape);
-            self.hideContextMenu();
-            self.showSuccess('ノードを複製しました');
+        if (typeSelector) {
+            typeSelector.style.display = 'none';
+            typeSelector.querySelectorAll('.type-option').forEach(option => {
+                option.onclick = null;
+            });
         }
+        
+        // 編集状態をクリア
+        if (self.selectedNodeElement) {
+            self.selectedNodeElement.classList.remove('editing');
+        }
+        
+        self.isInlineEditing(false);
+        self.inlineEditorType = null;
+        
+        // イベントリスナーを削除
+        document.removeEventListener('click', self.handleInlineEditorOutsideClick);
     };
     
-    // ノード種類変更
+    // インライン編集キャンセル
+    self.cancelInlineEdit = function() {
+        self.finishInlineEdit();
+    };
+    
+    // 外部クリック処理
+    self.handleInlineEditorOutsideClick = function(event) {
+        const textEditor = document.getElementById('inline-text-editor');
+        const typeSelector = document.getElementById('inline-type-selector');
+        
+        if (textEditor && textEditor.contains(event.target)) return;
+        if (typeSelector && typeSelector.contains(event.target)) return;
+        
+        self.finishInlineEdit();
+    };
+    
+    // 従来の関数（互換性のため）
+    self.editNode = function() {
+        self.startInlineTextEdit();
+    };
+    
     self.changeNodeType = function() {
-        if (!self.selectedNodeId()) {
-            self.showError('種類を変更するノードが選択されていません');
-            return;
-        }
-        
-        const types = [
-            { value: 'rect', label: '□ 処理' },
-            { value: 'round', label: '○ 開始/終了' },
-            { value: 'diamond', label: '◇ 判定' },
-            { value: 'hexagon', label: '⬢ 入力/出力' }
-        ];
-        
-        let selection = prompt(
-            'ノードの種類を選択してください:\n' +
-            types.map((t, i) => `${i + 1}. ${t.label}`).join('\n') +
-            '\n\n番号を入力してください (1-4):'
-        );
-        
-        if (selection && selection >= 1 && selection <= 4) {
-            const selectedType = types[selection - 1];
-            self.changeNodeShape(self.selectedNodeId(), selectedType.value);
-            self.hideContextMenu();
-            self.showSuccess('ノードの種類を変更しました');
-        }
-    };
-    
-    // 接続追加
-    self.addConnection = function() {
-        if (!self.selectedNodeId()) {
-            self.showError('接続元のノードが選択されていません');
-            return;
-        }
-        
-        self.showError('接続追加機能は実装予定です');
-        self.hideContextMenu();
+        self.startInlineTypeChange();
     };
     
     // 選択されたノード削除
@@ -940,29 +1092,6 @@ function ChartViewModel() {
         self.addToHistory();
     };
     
-    // Mermaidコードにノード追加
-    self.addNodeToMermaidCode = function(nodeId, text, shape = 'rect') {
-        let code = self.currentMermaidCode();
-        
-        const shapes = {
-            'rect': `${nodeId}[${text}]`,
-            'round': `${nodeId}(${text})`,
-            'diamond': `${nodeId}{${text}}`,
-            'hexagon': `${nodeId}[[${text}]]`
-        };
-        
-        const nodeDefinition = shapes[shape];
-        if (nodeDefinition) {
-            if (code.includes('graph TD')) {
-                code += `\n    ${nodeDefinition}`;
-            } else {
-                code = `graph TD\n    ${nodeDefinition}`;
-            }
-            
-            self.currentMermaidCode(code);
-            self.addToHistory();
-        }
-    };
     
     // Mermaidコードからノード削除
     self.removeNodeFromMermaidCode = function(nodeId) {

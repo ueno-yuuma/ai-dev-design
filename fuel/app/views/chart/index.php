@@ -148,35 +148,46 @@
         
         <!-- ノードコンテキストメニュー -->
         <div id="node-context-menu" class="node-context-menu">
-            <div class="menu-item" data-bind="click: editNode">
+            <div class="menu-item" data-bind="click: startInlineTextEdit">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
                 テキスト編集
             </div>
-            <div class="menu-item" data-bind="click: duplicateNode">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                複製
-            </div>
-            <div class="menu-item" data-bind="click: changeNodeType">
+            <div class="menu-item" data-bind="click: startInlineTypeChange">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
                 種類変更
-            </div>
-            <div class="menu-item" data-bind="click: addConnection">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                </svg>
-                接続追加
             </div>
             <div class="menu-item delete" data-bind="click: deleteSelectedNode">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
                 削除
+            </div>
+        </div>
+        
+        <!-- インライン編集要素 -->
+        <input type="text" id="inline-text-editor" class="inline-text-editor" style="display: none;" />
+        
+        <!-- ノード種類選択 -->
+        <div id="inline-type-selector" class="inline-type-selector" style="display: none;">
+            <div class="type-option" data-type="rect">
+                <div class="type-icon">□</div>
+                <span>処理</span>
+            </div>
+            <div class="type-option" data-type="round">
+                <div class="type-icon">○</div>
+                <span>開始/終了</span>
+            </div>
+            <div class="type-option" data-type="diamond">
+                <div class="type-icon">◇</div>
+                <span>判定</span>
+            </div>
+            <div class="type-option" data-type="hexagon">
+                <div class="type-icon">⬢</div>
+                <span>入力/出力</span>
             </div>
         </div>
 
