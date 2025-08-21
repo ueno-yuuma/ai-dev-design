@@ -275,7 +275,7 @@ function ChartViewModel() {
         const newChart = {
             id: null,
             title: '新しいフローチャート',
-            content: 'graph TD\\n    A[開始] --> B[処理]\\n    B --> C[終了]',
+            content: 'graph TD\n    A[開始] --> B[処理]\n    B --> C[終了]',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
@@ -369,11 +369,14 @@ function ChartViewModel() {
     // Mermaidレンダリング
     self.renderMermaid = function() {
         try {
-            const code = self.currentMermaidCode();
+            let code = self.currentMermaidCode();
             if (!code) {
                 self.mermaidHtml('<div class="text-muted text-center p-5">フローチャートコードを入力してください</div>');
                 return;
             }
+            
+            // Convert literal \n to actual newlines if they exist
+            code = code.replace(/\\n/g, '\n');
             
             const element = document.createElement('div');
             element.className = 'mermaid';
@@ -473,9 +476,9 @@ function ChartViewModel() {
         
         // 簡単なノード追加ロジック
         if (currentCode.includes('graph TD')) {
-            currentCode += `\\n    ${nodeId}[${nodeLabel}]`;
+            currentCode += `\n    ${nodeId}[${nodeLabel}]`;
         } else {
-            currentCode = `graph TD\\n    ${nodeId}[${nodeLabel}]`;
+            currentCode = `graph TD\n    ${nodeId}[${nodeLabel}]`;
         }
         
         self.currentMermaidCode(currentCode);
