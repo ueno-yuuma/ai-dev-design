@@ -456,11 +456,11 @@ body {
     padding: 20px;
     overflow: hidden;
     position: relative;
-    cursor: grab;
+    cursor: default;
 }
 
-#mermaid-display:active {
-    cursor: grabbing;
+#mermaid-display.panning {
+    cursor: grabbing !important;
 }
 
 #mermaid-display .mermaid-container {

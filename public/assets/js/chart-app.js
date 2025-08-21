@@ -496,9 +496,16 @@ function ChartViewModel() {
             return;
         }
         
-        if (e.button === 0) { // Left mouse button
+        if (e.button === 2) { // Right mouse button
             self.isDragging(true);
             self.lastMousePos = { x: e.clientX, y: e.clientY };
+            
+            // パン中のスタイル適用
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            if (mermaidDisplay) {
+                mermaidDisplay.classList.add('panning');
+            }
+            
             e.preventDefault();
         }
     };
@@ -520,12 +527,28 @@ function ChartViewModel() {
     
     // マウスアップ（パン終了）
     self.handleMouseUp = function(e) {
-        self.isDragging(false);
+        if (e.button === 2 || self.isDragging()) { // Right mouse button or currently dragging
+            self.isDragging(false);
+            
+            // パン中のスタイル削除
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            if (mermaidDisplay) {
+                mermaidDisplay.classList.remove('panning');
+            }
+        }
     };
     
     // マウスリーブ（パン終了）
     self.handleMouseLeave = function(e) {
-        self.isDragging(false);
+        if (self.isDragging()) {
+            self.isDragging(false);
+            
+            // パン中のスタイル削除
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            if (mermaidDisplay) {
+                mermaidDisplay.classList.remove('panning');
+            }
+        }
     };
     
     // Mermaidコンテナのトランスフォーム更新
@@ -565,6 +588,13 @@ function ChartViewModel() {
                 }
             });
             
+            // 右クリックでコンテキストメニュー表示
+            node.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                self.handleNodeRightClick(e, this);
+            });
+            
             // ドロップターゲット
             node.addEventListener('dragover', function(e) {
                 e.preventDefault();
@@ -591,10 +621,19 @@ function ChartViewModel() {
         
         // クリック外しでメニューを閉じる
         document.addEventListener('click', self.handleDocumentClick);
+        
+        // mermaid-display全体でブラウザの右クリックメニューを無効化
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        if (mermaidDisplay) {
+            mermaidDisplay.addEventListener('contextmenu', function(e) {
+                // ノード以外の場所での右クリックメニューを無効化
+                e.preventDefault();
+            });
+        }
     };
     
-    // ノードクリック処理
-    self.handleNodeClick = function(event, nodeElement) {
+    // ノード右クリック処理
+    self.handleNodeRightClick = function(event, nodeElement) {
         const nodeId = self.extractNodeId(nodeElement);
         if (!nodeId) return;
         
@@ -774,14 +813,7 @@ function ChartViewModel() {
                 self.createChildNode(self.dragSourceNode.id, dropX, dropY);
             }
         } else {
-            // クリック処理 - コンテキストメニューを表示
-            if (self.dragSourceNode) {
-                self.clearNodeSelection();
-                self.selectedNodeId(self.dragSourceNode.id);
-                self.selectedNodeElement = self.dragSourceNode.element;
-                self.highlightSelectedNode(self.dragSourceNode.element);
-                self.showContextMenu(event.clientX, event.clientY);
-            }
+            // 単純なクリック処理 - 何もしない（右クリックでメニュー表示）
         }
         
         // クリーンアップ
@@ -843,7 +875,7 @@ function ChartViewModel() {
         
         const mermaidDisplay = document.getElementById('mermaid-display');
         if (mermaidDisplay) {
-            mermaidDisplay.style.cursor = 'grab';
+            mermaidDisplay.style.cursor = 'default';
         }
         
         // イベントリスナーを削除
