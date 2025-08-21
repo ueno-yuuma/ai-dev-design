@@ -83,11 +83,43 @@ function ChartViewModel() {
     self.errorMessage = ko.observable('');
     self.successMessage = ko.observable('');
     
+    // ズーム関連
+    self.zoomLevel = ko.observable(1.0);
+    self.panX = ko.observable(0);
+    self.panY = ko.observable(0);
+    self.isDragging = ko.observable(false);
+    self.lastMousePos = { x: 0, y: 0 };
+    
+    // ノード選択・コンテキストメニュー関連
+    self.selectedNodeId = ko.observable(null);
+    self.selectedNodeElement = null;
+    self.contextMenuVisible = ko.observable(false);
+    self.isInlineEditing = ko.observable(false);
+    self.inlineEditorType = null; // 'text' or 'type'
+    
+    // ノード間ドラッグ&ドロップ関連
+    self.isNodeDragging = ko.observable(false);
+    self.dragSourceNode = null;
+    self.dragLine = null;
+    self.dragStartPos = { x: 0, y: 0 };
+    self.dragStartTime = 0;
+    self.dragThreshold = 5; // ピクセル
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
-    self.canUndo = ko.computed(() => self.historyIndex > 0);
-    self.canRedo = ko.computed(() => self.historyIndex < self.history.length - 1);
+    self.maxHistorySize = 50;
+    
+    // Undo/Redo状態
+    self.canUndo = ko.computed(function() {
+        const canUndoResult = self.historyIndex >= 1;
+        return canUndoResult;
+    });
+    
+    self.canRedo = ko.computed(function() {
+        const canRedoResult = self.historyIndex < self.history.length - 1;
+        return canRedoResult;
+    });
     
     // 初期化
     self.initialize = function() {
@@ -95,7 +127,11 @@ function ChartViewModel() {
         self.checkAuthStatus();
         self.setupDragAndDrop();
         self.setupNavTabs();
+        self.setupKeyboardShortcuts();
         self.renderMermaid();
+        
+        // 初期状態を履歴に追加
+        self.addToHistory('初期状態');
     };
     
     // 認証状態チェック
@@ -116,6 +152,8 @@ function ChartViewModel() {
                 // Load charts after authentication confirmed
                 setTimeout(() => {
                     self.loadCharts();
+                    // Automatically create a new chart after login
+                    self.createNewChart();
                 }, 100);
             } else {
                 self.isAuthenticated(false);
@@ -156,6 +194,8 @@ function ChartViewModel() {
                 self.userEmail(currentUser.email);
                 
                 self.loadCharts();
+                // Automatically create a new chart after login
+                self.createNewChart();
                 self.showSuccess('ログインしました');
             } else {
                 self.showError('ログインに失敗しました: ' + (data.error || '不明なエラー'));
@@ -275,7 +315,7 @@ function ChartViewModel() {
         const newChart = {
             id: null,
             title: '新しいフローチャート',
-            content: 'graph TD\\n    A[開始] --> B[処理]\\n    B --> C[終了]',
+            content: 'graph TD\n    A[開始] --> B[処理]\n    B --> C[終了]',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };
@@ -369,11 +409,15 @@ function ChartViewModel() {
     // Mermaidレンダリング
     self.renderMermaid = function() {
         try {
-            const code = self.currentMermaidCode();
-            if (!code) {
+            let code = self.currentMermaidCode();
+            
+            if (!code || code.trim() === '') {
                 self.mermaidHtml('<div class="text-muted text-center p-5">フローチャートコードを入力してください</div>');
                 return;
             }
+            
+            // Convert literal \n to actual newlines if they exist
+            code = code.replace(/\\n/g, '\n');
             
             const element = document.createElement('div');
             element.className = 'mermaid';
@@ -381,59 +425,632 @@ function ChartViewModel() {
             
             mermaid.render('mermaid-svg', code)
                 .then(result => {
-                    self.mermaidHtml(result.svg);
+                    // Wrap the SVG in a zoomable container
+                    const containerHtml = `<div class="mermaid-container" style="transform: scale(${self.zoomLevel()}) translate(${self.panX()}px, ${self.panY()}px);">${result.svg}</div>`;
+                    self.mermaidHtml(containerHtml);
+                    
+                    // Setup zoom and pan event listeners after rendering
+                    setTimeout(() => {
+                        self.setupZoomAndPan();
+                        self.setupNodeClickHandlers();
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Mermaidレンダリングエラー:', error);
                     self.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
                 });
         } catch (error) {
-            console.error('Mermaidレンダリングエラー:', error);
+            console.error('renderMermaid例外:', error);
             self.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
         }
     };
     
+    // ズーム・パン機能のセットアップ
+    self.setupZoomAndPan = function() {
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        if (!mermaidDisplay) return;
+        
+        // Remove existing event listeners to prevent duplicates
+        mermaidDisplay.removeEventListener('wheel', self.handleWheel);
+        mermaidDisplay.removeEventListener('mousedown', self.handleMouseDown);
+        mermaidDisplay.removeEventListener('mousemove', self.handleMouseMove);
+        mermaidDisplay.removeEventListener('mouseup', self.handleMouseUp);
+        mermaidDisplay.removeEventListener('mouseleave', self.handleMouseLeave);
+        
+        // Add event listeners
+        mermaidDisplay.addEventListener('wheel', self.handleWheel, { passive: false });
+        mermaidDisplay.addEventListener('mousedown', self.handleMouseDown);
+        mermaidDisplay.addEventListener('mousemove', self.handleMouseMove);
+        mermaidDisplay.addEventListener('mouseup', self.handleMouseUp);
+        mermaidDisplay.addEventListener('mouseleave', self.handleMouseLeave);
+    };
+    
+    // マウスホイールでズーム
+    self.handleWheel = function(e) {
+        // インライン編集中やノードドラッグ中はズームを無効にする
+        if (self.isInlineEditing() || self.isNodeDragging()) {
+            return;
+        }
+        
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const zoomFactor = 0.1;
+        const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
+        const newZoom = Math.max(0.1, Math.min(3.0, self.zoomLevel() + delta));
+        
+        self.zoomLevel(newZoom);
+        self.updateMermaidTransform();
+    };
+    
+    // マウスダウン（パン開始）
+    self.handleMouseDown = function(e) {
+        // インライン編集中やノードドラッグ中はパンを無効にする
+        if (self.isInlineEditing() || self.isNodeDragging()) {
+            return;
+        }
+        
+        // ノード上でのクリックの場合はパンしない
+        const target = e.target;
+        if (target.closest && target.closest('g.node')) {
+            return;
+        }
+        
+        if (e.button === 2) { // Right mouse button
+            self.isDragging(true);
+            self.lastMousePos = { x: e.clientX, y: e.clientY };
+            
+            // パン中のスタイル適用
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            if (mermaidDisplay) {
+                mermaidDisplay.classList.add('panning');
+            }
+            
+            e.preventDefault();
+        }
+    };
+    
+    // マウス移動（パン）
+    self.handleMouseMove = function(e) {
+        if (self.isDragging()) {
+            const deltaX = e.clientX - self.lastMousePos.x;
+            const deltaY = e.clientY - self.lastMousePos.y;
+            
+            self.panX(self.panX() + deltaX / self.zoomLevel());
+            self.panY(self.panY() + deltaY / self.zoomLevel());
+            
+            self.lastMousePos = { x: e.clientX, y: e.clientY };
+            self.updateMermaidTransform();
+            e.preventDefault();
+        }
+    };
+    
+    // マウスアップ（パン終了）
+    self.handleMouseUp = function(e) {
+        if (e.button === 2 || self.isDragging()) { // Right mouse button or currently dragging
+            self.isDragging(false);
+            
+            // パン中のスタイル削除
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            if (mermaidDisplay) {
+                mermaidDisplay.classList.remove('panning');
+            }
+        }
+    };
+    
+    // マウスリーブ（パン終了）
+    self.handleMouseLeave = function(e) {
+        if (self.isDragging()) {
+            self.isDragging(false);
+            
+            // パン中のスタイル削除
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            if (mermaidDisplay) {
+                mermaidDisplay.classList.remove('panning');
+            }
+        }
+    };
+    
+    // Mermaidコンテナのトランスフォーム更新
+    self.updateMermaidTransform = function() {
+        const container = document.querySelector('#mermaid-display .mermaid-container');
+        if (container) {
+            container.style.transform = `scale(${self.zoomLevel()}) translate(${self.panX()}px, ${self.panY()}px)`;
+        }
+    };
+    
+    // ズーム・パンリセット
+    self.resetZoomAndPan = function() {
+        self.zoomLevel(1.0);
+        self.panX(0);
+        self.panY(0);
+        self.updateMermaidTransform();
+    };
+    
+    // ノードクリックハンドラー設定
+    self.setupNodeClickHandlers = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return;
+        
+        // すべてのMermaidノードを取得
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        
+        nodes.forEach(node => {
+            // 既存のイベントリスナーを削除
+            node.removeEventListener('click', self.handleNodeClick);
+            
+            // マウスダウンでドラッグ/クリック処理を開始
+            node.addEventListener('mousedown', function(e) {
+                if (e.button === 0) { // 左クリックでドラッグ開始
+                    e.preventDefault();
+                    e.stopPropagation();
+                    self.startNodeDrag(e, this);
+                }
+            });
+            
+            // 右クリックでコンテキストメニュー表示
+            node.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                self.handleNodeRightClick(e, this);
+            });
+            
+            // ドロップターゲット
+            node.addEventListener('dragover', function(e) {
+                e.preventDefault();
+            });
+            
+            node.addEventListener('drop', function(e) {
+                e.preventDefault();
+                self.handleNodeDrop(e, this);
+            });
+            
+            // ホバー効果
+            node.addEventListener('mouseenter', function() {
+                if (!self.isDragging() && !self.isNodeDragging()) {
+                    this.style.cursor = 'pointer';
+                }
+            });
+            
+            node.addEventListener('mouseleave', function() {
+                if (!self.isDragging() && !self.isNodeDragging()) {
+                    this.style.cursor = 'default';
+                }
+            });
+        });
+        
+        // クリック外しでメニューを閉じる
+        document.addEventListener('click', self.handleDocumentClick);
+        
+        // mermaid-display全体でブラウザの右クリックメニューを無効化
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        if (mermaidDisplay) {
+            mermaidDisplay.addEventListener('contextmenu', function(e) {
+                // ノード以外の場所での右クリックメニューを無効化
+                e.preventDefault();
+            });
+        }
+    };
+    
+    // ノード右クリック処理
+    self.handleNodeRightClick = function(event, nodeElement) {
+        const nodeId = self.extractNodeId(nodeElement);
+        if (!nodeId) return;
+        
+        // 選択状態を更新
+        self.clearNodeSelection();
+        self.selectedNodeId(nodeId);
+        self.selectedNodeElement = nodeElement;
+        self.highlightSelectedNode(nodeElement);
+        
+        // コンテキストメニューを表示
+        self.showContextMenu(event.clientX, event.clientY);
+    };
+    
+    // ノードIDを抽出
+    self.extractNodeId = function(nodeElement) {
+        const id = nodeElement.id;
+        if (id && id.startsWith('flowchart-')) {
+            // Mermaidが生成するIDから実際のノードIDを抽出
+            return id.replace('flowchart-', '').split('-')[0];
+        }
+        return null;
+    };
+    
+    // ノード選択をクリア
+    self.clearNodeSelection = function() {
+        const prevSelected = document.querySelector('.node-rect.highlighted, .node-circle.highlighted, .node-diamond.highlighted, .node-hexagon.highlighted');
+        if (prevSelected) {
+            prevSelected.classList.remove('highlighted');
+        }
+        self.selectedNodeId(null);
+        self.selectedNodeElement = null;
+    };
+    
+    // 選択されたノードをハイライト
+    self.highlightSelectedNode = function(nodeElement) {
+        const shapes = nodeElement.querySelectorAll('rect, circle, polygon, path');
+        shapes.forEach(shape => {
+            if (shape.classList.contains('node-rect') || 
+                shape.classList.contains('node-circle') || 
+                shape.classList.contains('node-diamond') || 
+                shape.classList.contains('node-hexagon') ||
+                shape.getAttribute('class')?.includes('node')) {
+                shape.classList.add('highlighted');
+            }
+        });
+    };
+    
+    // コンテキストメニュー表示
+    self.showContextMenu = function(x, y) {
+        const menu = document.getElementById('node-context-menu');
+        if (!menu) return;
+        
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+        menu.classList.add('show');
+        self.contextMenuVisible(true);
+        
+        // 画面外に出る場合の調整
+        setTimeout(() => {
+            const rect = menu.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            if (rect.right > viewportWidth) {
+                menu.style.left = (x - rect.width) + 'px';
+            }
+            if (rect.bottom > viewportHeight) {
+                menu.style.top = (y - rect.height) + 'px';
+            }
+        }, 0);
+    };
+    
+    // コンテキストメニューを隠す
+    self.hideContextMenu = function() {
+        const menu = document.getElementById('node-context-menu');
+        if (menu) {
+            menu.classList.remove('show');
+        }
+        self.contextMenuVisible(false);
+    };
+    
+    // ドキュメントクリック処理
+    self.handleDocumentClick = function(event) {
+        const menu = document.getElementById('node-context-menu');
+        if (menu && !menu.contains(event.target)) {
+            self.hideContextMenu();
+        }
+    };
+    
+    // ノードドラッグ開始
+    self.startNodeDrag = function(event, nodeElement) {
+        const nodeId = self.extractNodeId(nodeElement);
+        if (!nodeId) return;
+        
+        // ドラッグ候補として記録
+        self.dragSourceNode = {
+            id: nodeId,
+            element: nodeElement
+        };
+        
+        // ドラッグ開始位置と時間を記録
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        const displayRect = mermaidDisplay.getBoundingClientRect();
+        self.dragStartPos = {
+            x: event.clientX - displayRect.left,
+            y: event.clientY - displayRect.top,
+            clientX: event.clientX,
+            clientY: event.clientY
+        };
+        self.dragStartTime = Date.now();
+        
+        // マウス移動とマウスアップのイベントリスナーを追加
+        document.addEventListener('mousemove', self.handleNodeDragMove);
+        document.addEventListener('mouseup', self.handleNodeDragEnd);
+    };
+    
+    // ノードドラッグ移動
+    self.handleNodeDragMove = function(event) {
+        if (!self.dragSourceNode) return;
+        
+        // まだドラッグモードに入っていない場合、距離をチェック
+        if (!self.isNodeDragging()) {
+            const distance = Math.sqrt(
+                Math.pow(event.clientX - self.dragStartPos.clientX, 2) + 
+                Math.pow(event.clientY - self.dragStartPos.clientY, 2)
+            );
+            
+            // しきい値を超えたらドラッグモードに入る
+            if (distance > self.dragThreshold) {
+                self.isNodeDragging(true);
+                
+                // 点線を作成
+                self.createDragLine(self.dragStartPos.x, self.dragStartPos.y);
+                
+                // ドラッグ中のスタイルを適用
+                self.dragSourceNode.element.style.opacity = '0.7';
+                const mermaidDisplay = document.getElementById('mermaid-display');
+                mermaidDisplay.style.cursor = 'crosshair';
+            } else {
+                return; // まだドラッグしていない
+            }
+        }
+        
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        const displayRect = mermaidDisplay.getBoundingClientRect();
+        const currentX = event.clientX - displayRect.left;
+        const currentY = event.clientY - displayRect.top;
+        
+        // 点線を更新
+        self.updateDragLine(self.dragStartPos.x, self.dragStartPos.y, currentX, currentY);
+    };
+    
+    // ノードドラッグ終了
+    self.handleNodeDragEnd = function(event) {
+        const wasDragging = self.isNodeDragging();
+        
+        if (wasDragging) {
+            // ドラッグ処理
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            const displayRect = mermaidDisplay.getBoundingClientRect();
+            const dropX = event.clientX - displayRect.left;
+            const dropY = event.clientY - displayRect.top;
+            
+            // ドロップ先のノードを検索
+            const targetNode = self.getNodeAtPosition(event.clientX, event.clientY);
+            
+            if (targetNode && targetNode !== self.dragSourceNode.element) {
+                // 既存ノードにドロップ - 接続を作成
+                const targetNodeId = self.extractNodeId(targetNode);
+                if (targetNodeId) {
+                    self.createConnection(self.dragSourceNode.id, targetNodeId);
+                    self.addToHistory(`接続追加: ${self.dragSourceNode.id} -> ${targetNodeId}`);
+                    self.showSuccess('ノード間に接続を作成しました');
+                }
+            } else {
+                // 空の場所にドロップ - 新しいノードを作成
+                self.createChildNode(self.dragSourceNode.id, dropX, dropY);
+            }
+        } else {
+            // 単純なクリック処理 - 何もしない（右クリックでメニュー表示）
+        }
+        
+        // クリーンアップ
+        self.endNodeDrag();
+    };
+    
+    // ドラッグライン作成
+    self.createDragLine = function(startX, startY) {
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        
+        // SVG要素を作成
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.position = 'absolute';
+        svg.style.top = '0';
+        svg.style.left = '0';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.pointerEvents = 'none';
+        svg.style.zIndex = '1000';
+        svg.id = 'drag-line-svg';
+        
+        // 点線を作成
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', startX);
+        line.setAttribute('y1', startY);
+        line.setAttribute('x2', startX);
+        line.setAttribute('y2', startY);
+        line.setAttribute('stroke', '#007bff');
+        line.setAttribute('stroke-width', '2');
+        line.setAttribute('stroke-dasharray', '5,5');
+        line.id = 'drag-line';
+        
+        svg.appendChild(line);
+        mermaidDisplay.appendChild(svg);
+        
+        self.dragLine = line;
+    };
+    
+    // ドラッグライン更新
+    self.updateDragLine = function(startX, startY, endX, endY) {
+        if (self.dragLine) {
+            self.dragLine.setAttribute('x2', endX);
+            self.dragLine.setAttribute('y2', endY);
+        }
+    };
+    
+    // ノードドラッグ終了処理
+    self.endNodeDrag = function() {
+        // ドラッグライン削除
+        const dragSvg = document.getElementById('drag-line-svg');
+        if (dragSvg) {
+            dragSvg.remove();
+        }
+        
+        // スタイルをリセット
+        if (self.dragSourceNode && self.dragSourceNode.element) {
+            self.dragSourceNode.element.style.opacity = '1';
+        }
+        
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        if (mermaidDisplay) {
+            mermaidDisplay.style.cursor = 'default';
+        }
+        
+        // イベントリスナーを削除
+        document.removeEventListener('mousemove', self.handleNodeDragMove);
+        document.removeEventListener('mouseup', self.handleNodeDragEnd);
+        
+        // 状態をリセット
+        self.isNodeDragging(false);
+        self.dragSourceNode = null;
+        self.dragLine = null;
+    };
+    
+    // 位置からノードを取得
+    self.getNodeAtPosition = function(clientX, clientY) {
+        const elements = document.elementsFromPoint(clientX, clientY);
+        for (let element of elements) {
+            if (element.classList && element.classList.contains('node')) {
+                return element;
+            }
+            // Mermaidのノード要素を探す
+            const nodeParent = element.closest('g.node');
+            if (nodeParent) {
+                return nodeParent;
+            }
+        }
+        return null;
+    };
+    
+    // ノード間接続を作成
+    self.createConnection = function(sourceId, targetId) {
+        let code = self.currentMermaidCode();
+        
+        // 既存の接続を確認
+        const connectionPattern = new RegExp(`${sourceId}\\s*-->\\s*${targetId}`, 'g');
+        if (connectionPattern.test(code)) {
+            self.showError('この接続は既に存在します');
+            return;
+        }
+        
+        // 新しい接続を追加
+        code += `\n    ${sourceId} --> ${targetId}`;
+        
+        self.currentMermaidCode(code);
+    };
+    
+    // 子ノードを作成
+    self.createChildNode = function(parentId, x, y) {
+        const newNodeId = 'node_' + Date.now();
+        const newNodeLabel = '新しいノード';
+        
+        let code = self.currentMermaidCode();
+        
+        // 新しいノードと接続を追加
+        code += `\n    ${newNodeId}[${newNodeLabel}]`;
+        code += `\n    ${parentId} --> ${newNodeId}`;
+        
+        self.currentMermaidCode(code);
+        self.addToHistory(`子ノード追加: ${parentId} -> ${newNodeId}`);
+        self.showSuccess('新しい子ノードを作成しました');
+    };
+    
+    // ノードドロップ処理
+    self.handleNodeDrop = function(event, targetElement) {
+        // この関数は現在のdragEndで処理されているため、空のままにしておきます
+    };
+    
+    // キーボードショートカットの設定
+    self.setupKeyboardShortcuts = function() {
+        document.addEventListener('keydown', function(e) {
+            // インライン編集中はショートカットを無効化
+            if (self.isInlineEditing()) {
+                return;
+            }
+            
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            self.redo();
+                        } else {
+                            self.undo();
+                        }
+                        break;
+                    case 'y':
+                        e.preventDefault();
+                        self.redo();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        self.saveChart();
+                        break;
+                }
+            }
+        });
+    };
+    
     // 履歴管理
-    self.addToHistory = function() {
+    self.addToHistory = function(description = '操作') {
         const state = {
             title: self.currentChartTitle(),
             code: self.currentMermaidCode(),
+            description: description,
             timestamp: Date.now()
         };
         
-        // 現在位置以降の履歴を削除
-        self.history = self.history.slice(0, self.historyIndex + 1);
+        // 現在の位置より後の履歴を削除（新しい操作が行われた場合）
+        if (self.historyIndex < self.history.length - 1) {
+            self.history.splice(self.historyIndex + 1);
+        }
+        
+        // 新しい状態を追加
         self.history.push(state);
         self.historyIndex = self.history.length - 1;
         
         // 履歴サイズ制限
-        if (self.history.length > 50) {
+        if (self.history.length > self.maxHistorySize) {
             self.history.shift();
             self.historyIndex--;
         }
+        
     };
     
-    // Undo
+    // 元に戻す (Undo)
     self.undo = function() {
-        if (self.canUndo()) {
-            self.historyIndex--;
-            const state = self.history[self.historyIndex];
+        // 直接的な条件チェック
+        if (self.historyIndex < 1 || self.history.length < 2) {
+            self.showError('これ以上元に戻せません');
+            return;
+        }
+        
+        self.historyIndex--;
+        const state = self.history[self.historyIndex];
+        
+        // 状態を復元（履歴に追加せず）
+        self.restoreState(state);
+        self.showSuccess(`元に戻しました: ${state.description}`);
+    };
+    
+    // やり直し (Redo)
+    self.redo = function() {
+        // 直接的な条件チェック
+        if (self.historyIndex >= self.history.length - 1) {
+            self.showError('これ以上やり直せません');
+            return;
+        }
+        
+        self.historyIndex++;
+        const state = self.history[self.historyIndex];
+        
+        // 状態を復元（履歴に追加せず）
+        self.restoreState(state);
+        self.showSuccess(`やり直しました: ${state.description}`);
+    };
+    
+    // 状態復元
+    self.restoreState = function(state) {
+        // 履歴追加を一時的に無効化
+        const originalAddToHistory = self.addToHistory;
+        self.addToHistory = function() {}; // 空関数で無効化
+        
+        try {
+            // 状態を復元（自動レンダリングに任せる）
             self.currentChartTitle(state.title);
-            self.currentMermaidCode(state.code);
-            self.renderMermaid();
+            self.currentMermaidCode(state.code); // この変更により自動レンダリングが実行される
+            
+        } catch (error) {
+            console.error('状態復元エラー:', error);
+            self.showError('状態復元中にエラーが発生しました');
+        } finally {
+            // 履歴追加機能を復元
+            self.addToHistory = originalAddToHistory;
         }
     };
     
-    // Redo
-    self.redo = function() {
-        if (self.canRedo()) {
-            self.historyIndex++;
-            const state = self.history[self.historyIndex];
-            self.currentChartTitle(state.title);
-            self.currentMermaidCode(state.code);
-            self.renderMermaid();
-        }
-    };
     
     // ナビゲーションタブ設定（削除されたタブ用の空関数）
     self.setupNavTabs = function() {
@@ -473,9 +1090,9 @@ function ChartViewModel() {
         
         // 簡単なノード追加ロジック
         if (currentCode.includes('graph TD')) {
-            currentCode += `\\n    ${nodeId}[${nodeLabel}]`;
+            currentCode += `\n    ${nodeId}[${nodeLabel}]`;
         } else {
-            currentCode = `graph TD\\n    ${nodeId}[${nodeLabel}]`;
+            currentCode = `graph TD\n    ${nodeId}[${nodeLabel}]`;
         }
         
         self.currentMermaidCode(currentCode);
@@ -522,14 +1139,369 @@ function ChartViewModel() {
         self.showError('AI最適化機能は実装予定です');
     };
     
-    // ノード更新
-    self.updateNode = function() {
-        self.showError('ノード更新機能は実装予定です');
+    // インライン編集機能
+    
+    // インラインテキスト編集開始
+    self.startInlineTextEdit = function() {
+        if (!self.selectedNodeId() || !self.selectedNodeElement) {
+            self.showError('編集するノードが選択されていません');
+            return;
+        }
+        
+        self.hideContextMenu();
+        self.startInlineEditor('text');
     };
     
-    // ノード削除
+    // インライン種類変更開始
+    self.startInlineTypeChange = function() {
+        if (!self.selectedNodeId() || !self.selectedNodeElement) {
+            self.showError('変更するノードが選択されていません');
+            return;
+        }
+        
+        self.hideContextMenu();
+        self.startInlineEditor('type');
+    };
+    
+    // インライン編集器を開始
+    self.startInlineEditor = function(type) {
+        if (self.isInlineEditing()) {
+            self.finishInlineEdit();
+        }
+        
+        self.isInlineEditing(true);
+        self.inlineEditorType = type;
+        
+        // ノードの位置を取得
+        const nodeRect = self.getNodeBounds(self.selectedNodeElement);
+        if (!nodeRect) return;
+        
+        if (type === 'text') {
+            self.showInlineTextEditor(nodeRect);
+        } else if (type === 'type') {
+            self.showInlineTypeSelector(nodeRect);
+        }
+        
+        // 編集中のスタイルを適用
+        self.selectedNodeElement.classList.add('editing');
+    };
+    
+    // インラインテキストエディター表示
+    self.showInlineTextEditor = function(nodeRect) {
+        const editor = document.getElementById('inline-text-editor');
+        if (!editor) return;
+        
+        const currentText = self.getNodeText(self.selectedNodeId());
+        editor.value = currentText;
+        
+        // 位置設定
+        const canvasRect = document.getElementById('mermaid-display').getBoundingClientRect();
+        editor.style.left = (canvasRect.left + nodeRect.centerX - 50) + 'px';
+        editor.style.top = (canvasRect.top + nodeRect.centerY - 10) + 'px';
+        editor.style.display = 'block';
+        
+        // フォーカスして選択
+        setTimeout(() => {
+            editor.focus();
+            editor.select();
+        }, 0);
+        
+        // イベントリスナー設定
+        editor.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                self.finishTextEdit();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                self.cancelInlineEdit();
+            }
+        };
+        
+        editor.onblur = function() {
+            setTimeout(() => self.finishTextEdit(), 100);
+        };
+    };
+    
+    // インライン種類選択表示
+    self.showInlineTypeSelector = function(nodeRect) {
+        const selector = document.getElementById('inline-type-selector');
+        if (!selector) return;
+        
+        // 現在の種類を取得
+        const currentNodeInfo = self.getNodeInfo(self.selectedNodeId());
+        const currentType = currentNodeInfo ? currentNodeInfo.shape : 'rect';
+        
+        // 現在の種類をハイライト
+        selector.querySelectorAll('.type-option').forEach(option => {
+            option.classList.remove('selected');
+            if (option.dataset.type === currentType) {
+                option.classList.add('selected');
+            }
+        });
+        
+        // 位置設定
+        const canvasRect = document.getElementById('mermaid-display').getBoundingClientRect();
+        selector.style.left = (canvasRect.left + nodeRect.centerX - 80) + 'px';
+        selector.style.top = (canvasRect.top + nodeRect.centerY + 20) + 'px';
+        selector.style.display = 'block';
+        
+        // クリックイベント設定
+        selector.querySelectorAll('.type-option').forEach(option => {
+            option.onclick = function() {
+                const newType = this.dataset.type;
+                if (newType !== currentType) {
+                    self.changeNodeShape(self.selectedNodeId(), newType);
+                    self.addToHistory('ノード種類変更');
+                    self.showSuccess('ノードの種類を変更しました');
+                }
+                self.finishInlineEdit();
+            };
+        });
+        
+        // 外部クリックで閉じる
+        setTimeout(() => {
+            document.addEventListener('click', self.handleInlineEditorOutsideClick);
+        }, 0);
+    };
+    
+    // ノードの境界を取得
+    self.getNodeBounds = function(nodeElement) {
+        try {
+            const rect = nodeElement.getBoundingClientRect();
+            const canvasRect = document.getElementById('mermaid-display').getBoundingClientRect();
+            
+            return {
+                centerX: rect.left + rect.width / 2 - canvasRect.left,
+                centerY: rect.top + rect.height / 2 - canvasRect.top,
+                width: rect.width,
+                height: rect.height
+            };
+        } catch (error) {
+            console.error('Error getting node bounds:', error);
+            return null;
+        }
+    };
+    
+    // テキスト編集完了
+    self.finishTextEdit = function() {
+        const editor = document.getElementById('inline-text-editor');
+        if (!editor || editor.style.display === 'none') return;
+        
+        const newText = editor.value.trim();
+        const currentText = self.getNodeText(self.selectedNodeId());
+        
+        if (newText && newText !== currentText) {
+            self.updateNodeText(self.selectedNodeId(), newText);
+            self.addToHistory('テキスト編集');
+            self.showSuccess('ノードのテキストを更新しました');
+        }
+        
+        self.finishInlineEdit();
+    };
+    
+    // インライン編集完了
+    self.finishInlineEdit = function() {
+        // エディターを非表示
+        const textEditor = document.getElementById('inline-text-editor');
+        const typeSelector = document.getElementById('inline-type-selector');
+        
+        if (textEditor) {
+            textEditor.style.display = 'none';
+            textEditor.onkeydown = null;
+            textEditor.onblur = null;
+        }
+        
+        if (typeSelector) {
+            typeSelector.style.display = 'none';
+            typeSelector.querySelectorAll('.type-option').forEach(option => {
+                option.onclick = null;
+            });
+        }
+        
+        // 編集状態をクリア
+        if (self.selectedNodeElement) {
+            self.selectedNodeElement.classList.remove('editing');
+        }
+        
+        self.isInlineEditing(false);
+        self.inlineEditorType = null;
+        
+        // イベントリスナーを削除
+        document.removeEventListener('click', self.handleInlineEditorOutsideClick);
+    };
+    
+    // インライン編集キャンセル
+    self.cancelInlineEdit = function() {
+        self.finishInlineEdit();
+    };
+    
+    // 外部クリック処理
+    self.handleInlineEditorOutsideClick = function(event) {
+        const textEditor = document.getElementById('inline-text-editor');
+        const typeSelector = document.getElementById('inline-type-selector');
+        
+        if (textEditor && textEditor.contains(event.target)) return;
+        if (typeSelector && typeSelector.contains(event.target)) return;
+        
+        self.finishInlineEdit();
+    };
+    
+    // 従来の関数（互換性のため）
+    self.editNode = function() {
+        self.startInlineTextEdit();
+    };
+    
+    self.changeNodeType = function() {
+        self.startInlineTypeChange();
+    };
+    
+    // 選択されたノード削除
+    self.deleteSelectedNode = function() {
+        if (!self.selectedNodeId()) {
+            self.showError('削除するノードが選択されていません');
+            return;
+        }
+        
+        if (confirm(`ノード「${self.getNodeText(self.selectedNodeId())}」を削除しますか？`)) {
+            const nodeText = self.getNodeText(self.selectedNodeId());
+            self.removeNodeFromMermaidCode(self.selectedNodeId());
+            self.addToHistory(`ノード削除: ${nodeText}`);
+            self.hideContextMenu();
+            self.clearNodeSelection();
+            self.showSuccess('ノードを削除しました');
+        }
+    };
+    
+    // ヘルパー関数
+    
+    // ノードテキスト取得
+    self.getNodeText = function(nodeId) {
+        const code = self.currentMermaidCode();
+        const regex = new RegExp(nodeId + '\\[([^\\]]+)\\]', 'g');
+        const match = regex.exec(code);
+        return match ? match[1] : nodeId;
+    };
+    
+    // ノード情報取得
+    self.getNodeInfo = function(nodeId) {
+        const code = self.currentMermaidCode();
+        
+        // 矩形ノード [text]
+        let regex = new RegExp(nodeId + '\\[([^\\]]+)\\]', 'g');
+        let match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'rect' };
+        
+        // 丸ノード (text)
+        regex = new RegExp(nodeId + '\\(([^\\)]+)\\)', 'g');
+        match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'round' };
+        
+        // ダイヤモンドノード {text}
+        regex = new RegExp(nodeId + '\\{([^\\}]+)\\}', 'g');
+        match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'diamond' };
+        
+        // ヘキサゴンノード [[text]]
+        regex = new RegExp(nodeId + '\\[\\[([^\\]]+)\\]\\]', 'g');
+        match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'hexagon' };
+        
+        return null;
+    };
+    
+    // ノードテキスト更新
+    self.updateNodeText = function(nodeId, newText) {
+        let code = self.currentMermaidCode();
+        
+        // 各形状のパターンでテキストを更新
+        const patterns = [
+            { regex: new RegExp(nodeId + '\\[([^\\]]+)\\]', 'g'), replacement: `${nodeId}[${newText}]` },
+            { regex: new RegExp(nodeId + '\\(([^\\)]+)\\)', 'g'), replacement: `${nodeId}(${newText})` },
+            { regex: new RegExp(nodeId + '\\{([^\\}]+)\\}', 'g'), replacement: `${nodeId}{${newText}}` },
+            { regex: new RegExp(nodeId + '\\[\\[([^\\]]+)\\]\\]', 'g'), replacement: `${nodeId}[[${newText}]]` }
+        ];
+        
+        patterns.forEach(pattern => {
+            code = code.replace(pattern.regex, pattern.replacement);
+        });
+        
+        self.currentMermaidCode(code);
+    };
+    
+    // ノード形状変更
+    self.changeNodeShape = function(nodeId, newShape) {
+        let code = self.currentMermaidCode();
+        const nodeInfo = self.getNodeInfo(nodeId);
+        if (!nodeInfo) return;
+        
+        // 現在の形状を削除
+        const currentPatterns = [
+            new RegExp(nodeId + '\\[[^\\]]+\\]', 'g'),
+            new RegExp(nodeId + '\\([^\\)]+\\)', 'g'),
+            new RegExp(nodeId + '\\{[^\\}]+\\}', 'g'),
+            new RegExp(nodeId + '\\[\\[[^\\]]+\\]\\]', 'g')
+        ];
+        
+        currentPatterns.forEach(pattern => {
+            code = code.replace(pattern, '');
+        });
+        
+        // 新しい形状を追加
+        const shapes = {
+            'rect': `${nodeId}[${nodeInfo.text}]`,
+            'round': `${nodeId}(${nodeInfo.text})`,
+            'diamond': `${nodeId}{${nodeInfo.text}}`,
+            'hexagon': `${nodeId}[[${nodeInfo.text}]]`
+        };
+        
+        const newNodeDef = shapes[newShape];
+        if (newNodeDef) {
+            // グラフ定義の後に新しいノード定義を追加
+            code = code.replace(/graph TD\s*\n/, `graph TD\n    ${newNodeDef}\n`);
+        }
+        
+        self.currentMermaidCode(code);
+    };
+    
+    
+    // Mermaidコードからノード削除
+    self.removeNodeFromMermaidCode = function(nodeId) {
+        let code = self.currentMermaidCode();
+        
+        // ノード定義を削除
+        const nodePatterns = [
+            new RegExp(`\\s*${nodeId}\\[[^\\]]+\\]`, 'g'),
+            new RegExp(`\\s*${nodeId}\\([^\\)]+\\)`, 'g'),
+            new RegExp(`\\s*${nodeId}\\{[^\\}]+\\}`, 'g'),
+            new RegExp(`\\s*${nodeId}\\[\\[[^\\]]+\\]\\]`, 'g')
+        ];
+        
+        nodePatterns.forEach(pattern => {
+            code = code.replace(pattern, '');
+        });
+        
+        // ノードへの接続を削除
+        const connectionPatterns = [
+            new RegExp(`\\s*[A-Za-z0-9_]+\\s*-->\\s*${nodeId}`, 'g'),
+            new RegExp(`\\s*${nodeId}\\s*-->\\s*[A-Za-z0-9_]+`, 'g'),
+            new RegExp(`\\s*[A-Za-z0-9_]+\\s*->>\\s*${nodeId}`, 'g'),
+            new RegExp(`\\s*${nodeId}\\s*->>\\s*[A-Za-z0-9_]+`, 'g')
+        ];
+        
+        connectionPatterns.forEach(pattern => {
+            code = code.replace(pattern, '');
+        });
+        
+        self.currentMermaidCode(code);
+    };
+    
+    // 従来のノード更新・削除関数（互換性のため）
+    self.updateNode = function() {
+        self.editNode();
+    };
+    
     self.deleteNode = function() {
-        self.showError('ノード削除機能は実装予定です');
+        self.deleteSelectedNode();
     };
     
     // エクスポート

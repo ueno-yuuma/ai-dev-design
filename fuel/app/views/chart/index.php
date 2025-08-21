@@ -3,10 +3,13 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIフローチャート設計支援システム</title>
+    <title><?php echo e($page_title); ?></title>
     
     <!-- Bootstrap CSS -->
     <?php echo Asset::css('bootstrap.min.css'); ?>
+    
+    <!-- Chart App CSS -->
+    <?php echo Asset::css('chart-app.css'); ?>
     
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -22,471 +25,6 @@
     
     <!-- Google Identity Services API -->
     <script src="https://accounts.google.com/gsi/client" onload="window.googleScriptLoaded && window.googleScriptLoaded()"></script>
-    
-    <style>
-        body {
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: #e5e5e5;
-            margin: 0;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        /* アプリケーション全体のレイアウト */
-        .app-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-        
-        .main-layout {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-        
-        /* 左側サイドバー */
-        .left-sidebar {
-            width: 60px;
-            background-color: #2c3e50;
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            padding: 20px 0;
-            gap: 20px;
-            justify-content: space-between;
-            transition: width 0.3s ease;
-            overflow: hidden;
-            position: relative;
-            z-index: 100;
-        }
-        
-        .left-sidebar:hover {
-            width: 200px;
-        }
-        
-        .sidebar-top,
-        .sidebar-bottom {
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            align-items: flex-start;
-            width: 100%;
-            padding: 0 20px;
-        }
-        
-        .sidebar-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            color: #ecf0f1;
-            cursor: pointer;
-            transition: color 0.3s;
-            white-space: nowrap;
-            width: 100%;
-            padding: 8px 0;
-        }
-        
-        .sidebar-item:hover {
-            color: #3498db;
-        }
-        
-        .sidebar-icon {
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-        }
-        
-        .sidebar-text {
-            font-size: 14px;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-            white-space: nowrap;
-        }
-        
-        .left-sidebar:hover .sidebar-text {
-            opacity: 1;
-        }
-        
-        /* チャートリストのスタイル */
-        .chart-list {
-            width: 100%;
-            margin-top: 20px;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        
-        .left-sidebar:hover .chart-list {
-            opacity: 1;
-        }
-        
-        .chart-list-title {
-            color: #bdc3c7;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 8px 0 12px 0;
-            border-bottom: 1px solid #34495e;
-            margin-bottom: 12px;
-            white-space: nowrap;
-        }
-
-        
-        .chart-items {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        
-        .chart-items::-webkit-scrollbar {
-            width: 4px;
-        }
-        
-        .chart-items::-webkit-scrollbar-track {
-            background: #34495e;
-        }
-        
-        .chart-items::-webkit-scrollbar-thumb {
-            background: #7f8c8d;
-            border-radius: 2px;
-        }
-        
-        .chart-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: #ecf0f1;
-            cursor: pointer;
-            padding: 8px 0;
-            border-radius: 4px;
-            transition: all 0.2s ease;
-            position: relative;
-        }
-        
-        .chart-item:hover {
-            background-color: rgba(52, 73, 94, 0.5);
-            color: #3498db;
-        }
-        
-        .chart-title {
-            flex: 1;
-            font-size: 13px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 120px;
-        }
-        
-        .chart-actions {
-            opacity: 0;
-            display: flex;
-            gap: 4px;
-            transition: opacity 0.2s ease;
-        }
-        
-        .chart-item:hover .chart-actions {
-            opacity: 1;
-        }
-        
-        .action-button {
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: rgba(231, 76, 60, 0.1);
-            border-radius: 3px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        
-        .action-button:hover {
-            background-color: rgba(231, 76, 60, 0.3);
-        }
-        
-        .action-button svg {
-            width: 12px;
-            height: 12px;
-            color: #e74c3c;
-        }
-
-        /* フローチャート操作ボタン */
-        .chart-controls {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            display: flex;
-            gap: 15px;
-            z-index: 10;
-        }
-        
-        .control-button {
-            width: 40px;
-            height: 40px;
-            background-color: rgba(255, 255, 255, 0.9);
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
-        .control-button:hover {
-            background-color: white;
-            border-color: #007bff;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-        }
-        
-        .control-button svg {
-            width: 20px;
-            height: 20px;
-            color: #495057;
-            transition: color 0.3s ease;
-        }
-        
-        .control-button:hover svg {
-            color: #007bff;
-        }
-        
-        
-        /* 中央のキャンバス */
-        .canvas-container {
-            flex: 1;
-            background-color: #e5e5e5;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        
-        /* チャートタイトルエリア */
-        .chart-title-container {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            z-index: 10;
-        }
-        
-        .chart-title-input {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 10px 15px;
-            font-size: 16px;
-            font-weight: 500;
-            font-family: 'Noto Sans JP', sans-serif;
-            background-color: rgba(255, 255, 255, 0.9);
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            min-width: 300px;
-        }
-        
-        .chart-title-input:focus {
-            outline: none;
-            border-color: #007bff;
-            background-color: white;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-        }
-        
-        .chart-title-input::placeholder {
-            color: #6c757d;
-            font-weight: 400;
-        }
-        
-        .chart-info {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            color: #6c757d;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 6px 12px;
-            border-radius: 6px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-        
-        .chart-info span:first-child {
-            font-weight: 500;
-            padding: 2px 6px;
-            border-radius: 10px;
-            font-size: 10px;
-            text-transform: uppercase;
-        }
-        
-        .chart-info .status-unsaved {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        
-        .chart-info .status-saved {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .canvas-content {
-            flex: 1;
-            background-color: #e5e5e5;
-            position: relative;
-            overflow: auto;
-        }
-        
-        .chart-canvas {
-            width: 100%;
-            height: 100%;
-            min-height: 600px;
-            background-color: #e5e5e5;
-            position: relative;
-        }
-        
-        /* フロー図のスタイル */
-        .flow-node {
-            background: linear-gradient(145deg, #b8e6b8, #90ee90);
-            border: 2px solid #4caf50;
-            border-radius: 8px;
-            padding: 15px;
-            box-shadow: 2px 2px 6px rgba(0,0,0,0.1);
-            position: absolute;
-            cursor: move;
-            font-size: 14px;
-            text-align: center;
-            min-width: 120px;
-        }
-        
-        .flow-node.process {
-            background: linear-gradient(145deg, #cce7ff, #87ceeb);
-            border-color: #2196f3;
-        }
-        
-        .flow-node.decision {
-            background: linear-gradient(145deg, #ffe6cc, #ffb366);
-            border-color: #ff9800;
-            transform: rotate(45deg);
-        }
-        
-        .flow-node.input {
-            background: linear-gradient(145deg, #f0e6ff, #dda0dd);
-            border-color: #9c27b0;
-        }
-        
-        .flow-node.output {
-            background: linear-gradient(145deg, #ffe6f0, #ffb3d9);
-            border-color: #e91e63;
-        }
-        
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-        }
-        
-        .btn-primary:hover {
-            background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
-        }
-        
-        /* メッセージとローディング */
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 2rem;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 1000;
-        }
-        
-        .error-message, .success-message {
-            position: absolute;
-            top: 75px;
-            right: 20px;
-            padding: 12px 20px;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 500;
-            z-index: 1001;
-            max-width: 300px;
-        }
-        
-        .error-message {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .success-message {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .auth-container {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            background-color: #e5e5e5;
-            text-align: center;
-        }
-        
-        .auth-box {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            max-width: 400px;
-        }
-
-        #google-signin-button {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 20px;
-        }
-        
-        #mermaid-display {
-            width: 100%;
-            height: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .modal-lg {
-            max-width: 80%;
-        }
-        
-        .code-editor {
-            font-family: 'Courier New', monospace;
-            min-height: 200px;
-        }
-        
-        /* レスポンシブ対応 */
-        @media (max-width: 768px) {
-            .left-sidebar {
-                width: 50px;
-            }
-            
-            .right-panel {
-                width: 250px;
-            }
-            
-            .nav-tab {
-                padding: 6px 12px;
-                font-size: 12px;
-            }
-        }
-    </style>
 </head>
 <body>
     <!-- 認証が必要な場合の表示 -->
@@ -500,7 +38,6 @@
 
     <!-- メインコンテンツ -->
     <div id="main-content" class="app-container" data-bind="visible: isAuthenticated">
-
         <!-- メインレイアウト -->
         <div class="main-layout">
             <!-- 左側サイドバー -->
@@ -554,7 +91,6 @@
 
             <!-- 中央のキャンバス -->
             <div class="canvas-container">
-                
                 <div class="canvas-content">
                     <div class="chart-canvas" id="chart-canvas" data-bind="event: { drop: onDrop, dragover: allowDrop }">
                         <!-- チャートタイトル入力エリア -->
@@ -573,6 +109,16 @@
                         
                         <!-- フローチャート操作ボタン -->
                         <div class="chart-controls">
+                            <div class="control-button" title="元に戻す (Ctrl+Z)" data-bind="click: $root.undo, css: { disabled: !canUndo() }">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                            </div>
+                            <div class="control-button" title="やり直し (Ctrl+Y)" data-bind="click: $root.redo, css: { disabled: !canRedo() }">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+                                </svg>
+                            </div>
                             <div class="control-button" title="保存 (Ctrl+S)" data-bind="click: $root.saveChart">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
@@ -586,6 +132,11 @@
                             <div class="control-button" title="エクスポート" data-bind="click: $root.exportChart">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
+                            </div>
+                            <div class="control-button" title="ズームリセット" data-bind="click: $root.resetZoomAndPan">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
                                 </svg>
                             </div>
                             <div class="control-button" title="ログアウト" data-bind="click: $root.logout">
@@ -603,10 +154,53 @@
                     </div>
                 </div>
             </div>
-
+        </div>
+        
+        <!-- ノードコンテキストメニュー -->
+        <div id="node-context-menu" class="node-context-menu">
+            <div class="menu-item" data-bind="click: startInlineTextEdit">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                テキスト編集
+            </div>
+            <div class="menu-item" data-bind="click: startInlineTypeChange">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                種類変更
+            </div>
+            <div class="menu-item delete" data-bind="click: deleteSelectedNode">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+                削除
+            </div>
+        </div>
+        
+        <!-- インライン編集要素 -->
+        <input type="text" id="inline-text-editor" class="inline-text-editor" style="display: none;" />
+        
+        <!-- ノード種類選択 -->
+        <div id="inline-type-selector" class="inline-type-selector" style="display: none;">
+            <div class="type-option" data-type="rect">
+                <div class="type-icon">□</div>
+                <span>処理</span>
+            </div>
+            <div class="type-option" data-type="round">
+                <div class="type-icon">○</div>
+                <span>開始/終了</span>
+            </div>
+            <div class="type-option" data-type="diamond">
+                <div class="type-icon">◇</div>
+                <span>判定</span>
+            </div>
+            <div class="type-option" data-type="hexagon">
+                <div class="type-icon">⬢</div>
+                <span>入力/出力</span>
+            </div>
         </div>
 
-        
         <!-- ローディング -->
         <div class="loading" id="loading" data-bind="visible: isLoading">
             <div class="spinner-border" role="status">
