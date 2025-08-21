@@ -83,6 +83,13 @@ function ChartViewModel() {
     self.errorMessage = ko.observable('');
     self.successMessage = ko.observable('');
     
+    // ズーム関連
+    self.zoomLevel = ko.observable(1.0);
+    self.panX = ko.observable(0);
+    self.panY = ko.observable(0);
+    self.isDragging = ko.observable(false);
+    self.lastMousePos = { x: 0, y: 0 };
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
@@ -388,7 +395,12 @@ function ChartViewModel() {
             
             mermaid.render('mermaid-svg', code)
                 .then(result => {
-                    self.mermaidHtml(result.svg);
+                    // Wrap the SVG in a zoomable container
+                    const containerHtml = `<div class="mermaid-container" style="transform: scale(${self.zoomLevel()}) translate(${self.panX()}px, ${self.panY()}px);">${result.svg}</div>`;
+                    self.mermaidHtml(containerHtml);
+                    
+                    // Setup zoom and pan event listeners after rendering
+                    setTimeout(() => self.setupZoomAndPan(), 100);
                 })
                 .catch(error => {
                     console.error('Mermaidレンダリングエラー:', error);
@@ -398,6 +410,89 @@ function ChartViewModel() {
             console.error('Mermaidレンダリングエラー:', error);
             self.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
         }
+    };
+    
+    // ズーム・パン機能のセットアップ
+    self.setupZoomAndPan = function() {
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        if (!mermaidDisplay) return;
+        
+        // Remove existing event listeners to prevent duplicates
+        mermaidDisplay.removeEventListener('wheel', self.handleWheel);
+        mermaidDisplay.removeEventListener('mousedown', self.handleMouseDown);
+        mermaidDisplay.removeEventListener('mousemove', self.handleMouseMove);
+        mermaidDisplay.removeEventListener('mouseup', self.handleMouseUp);
+        mermaidDisplay.removeEventListener('mouseleave', self.handleMouseLeave);
+        
+        // Add event listeners
+        mermaidDisplay.addEventListener('wheel', self.handleWheel, { passive: false });
+        mermaidDisplay.addEventListener('mousedown', self.handleMouseDown);
+        mermaidDisplay.addEventListener('mousemove', self.handleMouseMove);
+        mermaidDisplay.addEventListener('mouseup', self.handleMouseUp);
+        mermaidDisplay.addEventListener('mouseleave', self.handleMouseLeave);
+    };
+    
+    // マウスホイールでズーム
+    self.handleWheel = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const zoomFactor = 0.1;
+        const delta = e.deltaY > 0 ? -zoomFactor : zoomFactor;
+        const newZoom = Math.max(0.1, Math.min(3.0, self.zoomLevel() + delta));
+        
+        self.zoomLevel(newZoom);
+        self.updateMermaidTransform();
+    };
+    
+    // マウスダウン（パン開始）
+    self.handleMouseDown = function(e) {
+        if (e.button === 0) { // Left mouse button
+            self.isDragging(true);
+            self.lastMousePos = { x: e.clientX, y: e.clientY };
+            e.preventDefault();
+        }
+    };
+    
+    // マウス移動（パン）
+    self.handleMouseMove = function(e) {
+        if (self.isDragging()) {
+            const deltaX = e.clientX - self.lastMousePos.x;
+            const deltaY = e.clientY - self.lastMousePos.y;
+            
+            self.panX(self.panX() + deltaX / self.zoomLevel());
+            self.panY(self.panY() + deltaY / self.zoomLevel());
+            
+            self.lastMousePos = { x: e.clientX, y: e.clientY };
+            self.updateMermaidTransform();
+            e.preventDefault();
+        }
+    };
+    
+    // マウスアップ（パン終了）
+    self.handleMouseUp = function(e) {
+        self.isDragging(false);
+    };
+    
+    // マウスリーブ（パン終了）
+    self.handleMouseLeave = function(e) {
+        self.isDragging(false);
+    };
+    
+    // Mermaidコンテナのトランスフォーム更新
+    self.updateMermaidTransform = function() {
+        const container = document.querySelector('#mermaid-display .mermaid-container');
+        if (container) {
+            container.style.transform = `scale(${self.zoomLevel()}) translate(${self.panX()}px, ${self.panY()}px)`;
+        }
+    };
+    
+    // ズーム・パンリセット
+    self.resetZoomAndPan = function() {
+        self.zoomLevel(1.0);
+        self.panX(0);
+        self.panY(0);
+        self.updateMermaidTransform();
     };
     
     // 履歴管理
