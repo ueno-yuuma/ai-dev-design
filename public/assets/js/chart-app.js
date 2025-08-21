@@ -97,6 +97,14 @@ function ChartViewModel() {
     self.isInlineEditing = ko.observable(false);
     self.inlineEditorType = null; // 'text' or 'type'
     
+    // ノード間ドラッグ&ドロップ関連
+    self.isNodeDragging = ko.observable(false);
+    self.dragSourceNode = null;
+    self.dragLine = null;
+    self.dragStartPos = { x: 0, y: 0 };
+    self.dragStartTime = 0;
+    self.dragThreshold = 5; // ピクセル
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
@@ -459,8 +467,8 @@ function ChartViewModel() {
     
     // マウスホイールでズーム
     self.handleWheel = function(e) {
-        // インライン編集中はズームを無効にする
-        if (self.isInlineEditing()) {
+        // インライン編集中やノードドラッグ中はズームを無効にする
+        if (self.isInlineEditing() || self.isNodeDragging()) {
             return;
         }
         
@@ -477,8 +485,14 @@ function ChartViewModel() {
     
     // マウスダウン（パン開始）
     self.handleMouseDown = function(e) {
-        // インライン編集中はパンを無効にする
-        if (self.isInlineEditing()) {
+        // インライン編集中やノードドラッグ中はパンを無効にする
+        if (self.isInlineEditing() || self.isNodeDragging()) {
+            return;
+        }
+        
+        // ノード上でのクリックの場合はパンしない
+        const target = e.target;
+        if (target.closest && target.closest('g.node')) {
             return;
         }
         
@@ -542,22 +556,36 @@ function ChartViewModel() {
             // 既存のイベントリスナーを削除
             node.removeEventListener('click', self.handleNodeClick);
             
-            // 新しいイベントリスナーを追加
-            node.addEventListener('click', function(e) {
+            // マウスダウンでドラッグ/クリック処理を開始
+            node.addEventListener('mousedown', function(e) {
+                if (e.button === 0) { // 左クリックでドラッグ開始
+                    e.preventDefault();
+                    e.stopPropagation();
+                    self.startNodeDrag(e, this);
+                }
+            });
+            
+            // ドロップターゲット
+            node.addEventListener('dragover', function(e) {
                 e.preventDefault();
-                e.stopPropagation();
-                self.handleNodeClick(e, this);
+            });
+            
+            node.addEventListener('drop', function(e) {
+                e.preventDefault();
+                self.handleNodeDrop(e, this);
             });
             
             // ホバー効果
             node.addEventListener('mouseenter', function() {
-                if (!self.isDragging()) {
+                if (!self.isDragging() && !self.isNodeDragging()) {
                     this.style.cursor = 'pointer';
                 }
             });
             
             node.addEventListener('mouseleave', function() {
-                this.style.cursor = 'default';
+                if (!self.isDragging() && !self.isNodeDragging()) {
+                    this.style.cursor = 'default';
+                }
             });
         });
         
@@ -654,6 +682,232 @@ function ChartViewModel() {
         if (menu && !menu.contains(event.target)) {
             self.hideContextMenu();
         }
+    };
+    
+    // ノードドラッグ開始
+    self.startNodeDrag = function(event, nodeElement) {
+        const nodeId = self.extractNodeId(nodeElement);
+        if (!nodeId) return;
+        
+        // ドラッグ候補として記録
+        self.dragSourceNode = {
+            id: nodeId,
+            element: nodeElement
+        };
+        
+        // ドラッグ開始位置と時間を記録
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        const displayRect = mermaidDisplay.getBoundingClientRect();
+        self.dragStartPos = {
+            x: event.clientX - displayRect.left,
+            y: event.clientY - displayRect.top,
+            clientX: event.clientX,
+            clientY: event.clientY
+        };
+        self.dragStartTime = Date.now();
+        
+        // マウス移動とマウスアップのイベントリスナーを追加
+        document.addEventListener('mousemove', self.handleNodeDragMove);
+        document.addEventListener('mouseup', self.handleNodeDragEnd);
+    };
+    
+    // ノードドラッグ移動
+    self.handleNodeDragMove = function(event) {
+        if (!self.dragSourceNode) return;
+        
+        // まだドラッグモードに入っていない場合、距離をチェック
+        if (!self.isNodeDragging()) {
+            const distance = Math.sqrt(
+                Math.pow(event.clientX - self.dragStartPos.clientX, 2) + 
+                Math.pow(event.clientY - self.dragStartPos.clientY, 2)
+            );
+            
+            // しきい値を超えたらドラッグモードに入る
+            if (distance > self.dragThreshold) {
+                self.isNodeDragging(true);
+                
+                // 点線を作成
+                self.createDragLine(self.dragStartPos.x, self.dragStartPos.y);
+                
+                // ドラッグ中のスタイルを適用
+                self.dragSourceNode.element.style.opacity = '0.7';
+                const mermaidDisplay = document.getElementById('mermaid-display');
+                mermaidDisplay.style.cursor = 'crosshair';
+            } else {
+                return; // まだドラッグしていない
+            }
+        }
+        
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        const displayRect = mermaidDisplay.getBoundingClientRect();
+        const currentX = event.clientX - displayRect.left;
+        const currentY = event.clientY - displayRect.top;
+        
+        // 点線を更新
+        self.updateDragLine(self.dragStartPos.x, self.dragStartPos.y, currentX, currentY);
+    };
+    
+    // ノードドラッグ終了
+    self.handleNodeDragEnd = function(event) {
+        const wasDragging = self.isNodeDragging();
+        
+        if (wasDragging) {
+            // ドラッグ処理
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            const displayRect = mermaidDisplay.getBoundingClientRect();
+            const dropX = event.clientX - displayRect.left;
+            const dropY = event.clientY - displayRect.top;
+            
+            // ドロップ先のノードを検索
+            const targetNode = self.getNodeAtPosition(event.clientX, event.clientY);
+            
+            if (targetNode && targetNode !== self.dragSourceNode.element) {
+                // 既存ノードにドロップ - 接続を作成
+                const targetNodeId = self.extractNodeId(targetNode);
+                if (targetNodeId) {
+                    self.createConnection(self.dragSourceNode.id, targetNodeId);
+                    self.addToHistory(`接続追加: ${self.dragSourceNode.id} -> ${targetNodeId}`);
+                    self.showSuccess('ノード間に接続を作成しました');
+                }
+            } else {
+                // 空の場所にドロップ - 新しいノードを作成
+                self.createChildNode(self.dragSourceNode.id, dropX, dropY);
+            }
+        } else {
+            // クリック処理 - コンテキストメニューを表示
+            if (self.dragSourceNode) {
+                self.clearNodeSelection();
+                self.selectedNodeId(self.dragSourceNode.id);
+                self.selectedNodeElement = self.dragSourceNode.element;
+                self.highlightSelectedNode(self.dragSourceNode.element);
+                self.showContextMenu(event.clientX, event.clientY);
+            }
+        }
+        
+        // クリーンアップ
+        self.endNodeDrag();
+    };
+    
+    // ドラッグライン作成
+    self.createDragLine = function(startX, startY) {
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        
+        // SVG要素を作成
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.style.position = 'absolute';
+        svg.style.top = '0';
+        svg.style.left = '0';
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        svg.style.pointerEvents = 'none';
+        svg.style.zIndex = '1000';
+        svg.id = 'drag-line-svg';
+        
+        // 点線を作成
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', startX);
+        line.setAttribute('y1', startY);
+        line.setAttribute('x2', startX);
+        line.setAttribute('y2', startY);
+        line.setAttribute('stroke', '#007bff');
+        line.setAttribute('stroke-width', '2');
+        line.setAttribute('stroke-dasharray', '5,5');
+        line.id = 'drag-line';
+        
+        svg.appendChild(line);
+        mermaidDisplay.appendChild(svg);
+        
+        self.dragLine = line;
+    };
+    
+    // ドラッグライン更新
+    self.updateDragLine = function(startX, startY, endX, endY) {
+        if (self.dragLine) {
+            self.dragLine.setAttribute('x2', endX);
+            self.dragLine.setAttribute('y2', endY);
+        }
+    };
+    
+    // ノードドラッグ終了処理
+    self.endNodeDrag = function() {
+        // ドラッグライン削除
+        const dragSvg = document.getElementById('drag-line-svg');
+        if (dragSvg) {
+            dragSvg.remove();
+        }
+        
+        // スタイルをリセット
+        if (self.dragSourceNode && self.dragSourceNode.element) {
+            self.dragSourceNode.element.style.opacity = '1';
+        }
+        
+        const mermaidDisplay = document.getElementById('mermaid-display');
+        if (mermaidDisplay) {
+            mermaidDisplay.style.cursor = 'grab';
+        }
+        
+        // イベントリスナーを削除
+        document.removeEventListener('mousemove', self.handleNodeDragMove);
+        document.removeEventListener('mouseup', self.handleNodeDragEnd);
+        
+        // 状態をリセット
+        self.isNodeDragging(false);
+        self.dragSourceNode = null;
+        self.dragLine = null;
+    };
+    
+    // 位置からノードを取得
+    self.getNodeAtPosition = function(clientX, clientY) {
+        const elements = document.elementsFromPoint(clientX, clientY);
+        for (let element of elements) {
+            if (element.classList && element.classList.contains('node')) {
+                return element;
+            }
+            // Mermaidのノード要素を探す
+            const nodeParent = element.closest('g.node');
+            if (nodeParent) {
+                return nodeParent;
+            }
+        }
+        return null;
+    };
+    
+    // ノード間接続を作成
+    self.createConnection = function(sourceId, targetId) {
+        let code = self.currentMermaidCode();
+        
+        // 既存の接続を確認
+        const connectionPattern = new RegExp(`${sourceId}\\s*-->\\s*${targetId}`, 'g');
+        if (connectionPattern.test(code)) {
+            self.showError('この接続は既に存在します');
+            return;
+        }
+        
+        // 新しい接続を追加
+        code += `\n    ${sourceId} --> ${targetId}`;
+        
+        self.currentMermaidCode(code);
+    };
+    
+    // 子ノードを作成
+    self.createChildNode = function(parentId, x, y) {
+        const newNodeId = 'node_' + Date.now();
+        const newNodeLabel = '新しいノード';
+        
+        let code = self.currentMermaidCode();
+        
+        // 新しいノードと接続を追加
+        code += `\n    ${newNodeId}[${newNodeLabel}]`;
+        code += `\n    ${parentId} --> ${newNodeId}`;
+        
+        self.currentMermaidCode(code);
+        self.addToHistory(`子ノード追加: ${parentId} -> ${newNodeId}`);
+        self.showSuccess('新しい子ノードを作成しました');
+    };
+    
+    // ノードドロップ処理
+    self.handleNodeDrop = function(event, targetElement) {
+        // この関数は現在のdragEndで処理されているため、空のままにしておきます
     };
     
     // キーボードショートカットの設定
