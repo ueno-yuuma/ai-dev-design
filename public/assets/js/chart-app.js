@@ -1114,6 +1114,11 @@ function ChartViewModel() {
         return typeMap[nodeType] || '処理';
     };
     
+    // 操作方法表示
+    self.showOperationGuide = function() {
+        $('#operation-guide-modal').modal('show');
+    };
+    
     // 設定表示
     self.showSettings = function() {
         self.showError('設定機能は実装予定です');
