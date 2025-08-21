@@ -232,6 +232,21 @@ body {
     color: #007bff;
 }
 
+.control-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.control-button:disabled:hover {
+    background-color: rgba(255, 255, 255, 0.9);
+    border-color: #ddd;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.control-button:disabled:hover svg {
+    color: #495057;
+}
+
 /* 中央のキャンバス */
 .canvas-container {
     flex: 1;

@@ -100,8 +100,18 @@ function ChartViewModel() {
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
-    self.canUndo = ko.computed(() => self.historyIndex > 0);
-    self.canRedo = ko.computed(() => self.historyIndex < self.history.length - 1);
+    self.maxHistorySize = 50;
+    
+    // Undo/Redo状態
+    self.canUndo = ko.computed(function() {
+        const canUndoResult = self.historyIndex >= 1;
+        return canUndoResult;
+    });
+    
+    self.canRedo = ko.computed(function() {
+        const canRedoResult = self.historyIndex < self.history.length - 1;
+        return canRedoResult;
+    });
     
     // 初期化
     self.initialize = function() {
@@ -109,7 +119,11 @@ function ChartViewModel() {
         self.checkAuthStatus();
         self.setupDragAndDrop();
         self.setupNavTabs();
+        self.setupKeyboardShortcuts();
         self.renderMermaid();
+        
+        // 初期状態を履歴に追加
+        self.addToHistory('初期状態');
     };
     
     // 認証状態チェック
@@ -388,7 +402,8 @@ function ChartViewModel() {
     self.renderMermaid = function() {
         try {
             let code = self.currentMermaidCode();
-            if (!code) {
+            
+            if (!code || code.trim() === '') {
                 self.mermaidHtml('<div class="text-muted text-center p-5">フローチャートコードを入力してください</div>');
                 return;
             }
@@ -417,7 +432,7 @@ function ChartViewModel() {
                     self.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
                 });
         } catch (error) {
-            console.error('Mermaidレンダリングエラー:', error);
+            console.error('renderMermaid例外:', error);
             self.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
         }
     };
@@ -641,47 +656,115 @@ function ChartViewModel() {
         }
     };
     
+    // キーボードショートカットの設定
+    self.setupKeyboardShortcuts = function() {
+        document.addEventListener('keydown', function(e) {
+            // インライン編集中はショートカットを無効化
+            if (self.isInlineEditing()) {
+                return;
+            }
+            
+            if (e.ctrlKey || e.metaKey) {
+                switch (e.key.toLowerCase()) {
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            self.redo();
+                        } else {
+                            self.undo();
+                        }
+                        break;
+                    case 'y':
+                        e.preventDefault();
+                        self.redo();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        self.saveChart();
+                        break;
+                }
+            }
+        });
+    };
+    
     // 履歴管理
-    self.addToHistory = function() {
+    self.addToHistory = function(description = '操作') {
         const state = {
             title: self.currentChartTitle(),
             code: self.currentMermaidCode(),
+            description: description,
             timestamp: Date.now()
         };
         
-        // 現在位置以降の履歴を削除
-        self.history = self.history.slice(0, self.historyIndex + 1);
+        // 現在の位置より後の履歴を削除（新しい操作が行われた場合）
+        if (self.historyIndex < self.history.length - 1) {
+            self.history.splice(self.historyIndex + 1);
+        }
+        
+        // 新しい状態を追加
         self.history.push(state);
         self.historyIndex = self.history.length - 1;
         
         // 履歴サイズ制限
-        if (self.history.length > 50) {
+        if (self.history.length > self.maxHistorySize) {
             self.history.shift();
             self.historyIndex--;
         }
+        
     };
     
-    // Undo
+    // 元に戻す (Undo)
     self.undo = function() {
-        if (self.canUndo()) {
-            self.historyIndex--;
-            const state = self.history[self.historyIndex];
+        // 直接的な条件チェック
+        if (self.historyIndex < 1 || self.history.length < 2) {
+            self.showError('これ以上元に戻せません');
+            return;
+        }
+        
+        self.historyIndex--;
+        const state = self.history[self.historyIndex];
+        
+        // 状態を復元（履歴に追加せず）
+        self.restoreState(state);
+        self.showSuccess(`元に戻しました: ${state.description}`);
+    };
+    
+    // やり直し (Redo)
+    self.redo = function() {
+        // 直接的な条件チェック
+        if (self.historyIndex >= self.history.length - 1) {
+            self.showError('これ以上やり直せません');
+            return;
+        }
+        
+        self.historyIndex++;
+        const state = self.history[self.historyIndex];
+        
+        // 状態を復元（履歴に追加せず）
+        self.restoreState(state);
+        self.showSuccess(`やり直しました: ${state.description}`);
+    };
+    
+    // 状態復元
+    self.restoreState = function(state) {
+        // 履歴追加を一時的に無効化
+        const originalAddToHistory = self.addToHistory;
+        self.addToHistory = function() {}; // 空関数で無効化
+        
+        try {
+            // 状態を復元（自動レンダリングに任せる）
             self.currentChartTitle(state.title);
-            self.currentMermaidCode(state.code);
-            self.renderMermaid();
+            self.currentMermaidCode(state.code); // この変更により自動レンダリングが実行される
+            
+        } catch (error) {
+            console.error('状態復元エラー:', error);
+            self.showError('状態復元中にエラーが発生しました');
+        } finally {
+            // 履歴追加機能を復元
+            self.addToHistory = originalAddToHistory;
         }
     };
     
-    // Redo
-    self.redo = function() {
-        if (self.canRedo()) {
-            self.historyIndex++;
-            const state = self.history[self.historyIndex];
-            self.currentChartTitle(state.title);
-            self.currentMermaidCode(state.code);
-            self.renderMermaid();
-        }
-    };
     
     // ナビゲーションタブ設定（削除されたタブ用の空関数）
     self.setupNavTabs = function() {
@@ -882,6 +965,7 @@ function ChartViewModel() {
                 const newType = this.dataset.type;
                 if (newType !== currentType) {
                     self.changeNodeShape(self.selectedNodeId(), newType);
+                    self.addToHistory('ノード種類変更');
                     self.showSuccess('ノードの種類を変更しました');
                 }
                 self.finishInlineEdit();
@@ -922,6 +1006,7 @@ function ChartViewModel() {
         
         if (newText && newText !== currentText) {
             self.updateNodeText(self.selectedNodeId(), newText);
+            self.addToHistory('テキスト編集');
             self.showSuccess('ノードのテキストを更新しました');
         }
         
@@ -992,7 +1077,9 @@ function ChartViewModel() {
         }
         
         if (confirm(`ノード「${self.getNodeText(self.selectedNodeId())}」を削除しますか？`)) {
+            const nodeText = self.getNodeText(self.selectedNodeId());
             self.removeNodeFromMermaidCode(self.selectedNodeId());
+            self.addToHistory(`ノード削除: ${nodeText}`);
             self.hideContextMenu();
             self.clearNodeSelection();
             self.showSuccess('ノードを削除しました');
@@ -1053,7 +1140,6 @@ function ChartViewModel() {
         });
         
         self.currentMermaidCode(code);
-        self.addToHistory();
     };
     
     // ノード形状変更
@@ -1089,7 +1175,6 @@ function ChartViewModel() {
         }
         
         self.currentMermaidCode(code);
-        self.addToHistory();
     };
     
     
@@ -1122,7 +1207,6 @@ function ChartViewModel() {
         });
         
         self.currentMermaidCode(code);
-        self.addToHistory();
     };
     
     // 従来のノード更新・削除関数（互換性のため）

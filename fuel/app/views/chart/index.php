@@ -109,6 +109,16 @@
                         
                         <!-- フローチャート操作ボタン -->
                         <div class="chart-controls">
+                            <div class="control-button" title="元に戻す (Ctrl+Z)" data-bind="click: $root.undo, css: { disabled: !canUndo() }">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                                </svg>
+                            </div>
+                            <div class="control-button" title="やり直し (Ctrl+Y)" data-bind="click: $root.redo, css: { disabled: !canRedo() }">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10h-10a8 8 0 00-8 8v2M21 10l-6 6m6-6l-6-6" />
+                                </svg>
+                            </div>
                             <div class="control-button" title="保存 (Ctrl+S)" data-bind="click: $root.saveChart">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
