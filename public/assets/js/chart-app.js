@@ -116,6 +116,8 @@ function ChartViewModel() {
                 // Load charts after authentication confirmed
                 setTimeout(() => {
                     self.loadCharts();
+                    // Automatically create a new chart after login
+                    self.createNewChart();
                 }, 100);
             } else {
                 self.isAuthenticated(false);
@@ -156,6 +158,8 @@ function ChartViewModel() {
                 self.userEmail(currentUser.email);
                 
                 self.loadCharts();
+                // Automatically create a new chart after login
+                self.createNewChart();
                 self.showSuccess('ログインしました');
             } else {
                 self.showError('ログインに失敗しました: ' + (data.error || '不明なエラー'));
