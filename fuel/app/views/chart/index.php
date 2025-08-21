@@ -244,13 +244,10 @@
     <div class="modal fade" id="operation-guide-modal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">操作方法</h5>
-                    <button type="button" class="close" data-dismiss="modal">
+                <div class="modal-body" style="position: relative;">
+                    <button type="button" class="close" data-dismiss="modal" style="position: absolute; top: 15px; right: 15px; z-index: 1;">
                         <span>&times;</span>
                     </button>
-                </div>
-                <div class="modal-body">
                     <h6><strong>基本操作</strong></h6>
                     <ul>
                         <li><strong>新規作成:</strong> 左サイドバーの「新規作成」ボタンまたはCtrl+N</li>
@@ -289,9 +286,6 @@
                         <li><strong>インポート:</strong> JSONファイルからチャートを読み込み</li>
                         <li><strong>エクスポート:</strong> チャートをJSONファイルで保存</li>
                     </ul>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-dismiss="modal">閉じる</button>
                 </div>
             </div>
         </div>
