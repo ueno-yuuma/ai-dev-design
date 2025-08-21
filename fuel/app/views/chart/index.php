@@ -77,6 +77,14 @@
                     </div>
                 </div>
                 <div class="sidebar-bottom">
+                    <div class="sidebar-item" title="操作方法" data-bind="click: $root.showOperationGuide">
+                        <div class="sidebar-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
+                        <span class="sidebar-text">操作方法</span>
+                    </div>
                     <div class="sidebar-item" title="設定" data-bind="click: $root.showSettings">
                         <div class="sidebar-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -227,6 +235,63 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">キャンセル</button>
                     <button type="button" class="btn btn-primary" data-bind="click: updateFromCode">適用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作方法モーダル -->
+    <div class="modal fade" id="operation-guide-modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">操作方法</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <h6><strong>基本操作</strong></h6>
+                    <ul>
+                        <li><strong>新規作成:</strong> 左サイドバーの「新規作成」ボタンまたはCtrl+N</li>
+                        <li><strong>保存:</strong> 右上の保存ボタンまたはCtrl+S</li>
+                        <li><strong>元に戻す:</strong> Ctrl+Z</li>
+                        <li><strong>やり直し:</strong> Ctrl+Y</li>
+                    </ul>
+
+                    <h6><strong>チャート操作</strong></h6>
+                    <ul>
+                        <li><strong>ズーム:</strong> マウスホイール</li>
+                        <li><strong>パン（移動）:</strong> 右クリック+ドラッグ</li>
+                        <li><strong>ズームリセット:</strong> 右上のリセットボタン</li>
+                    </ul>
+
+                    <h6><strong>ノード操作</strong></h6>
+                    <ul>
+                        <li><strong>ノード接続作成:</strong> ノードから他のノードへ左ドラッグ</li>
+                        <li><strong>子ノード作成:</strong> ノードから空の場所へ左ドラッグ</li>
+                        <li><strong>ノードメニュー:</strong> ノードを右クリック</li>
+                        <li><strong>テキスト編集:</strong> 右クリックメニューから「テキスト編集」</li>
+                        <li><strong>種類変更:</strong> 右クリックメニューから「種類変更」</li>
+                        <li><strong>ノード削除:</strong> 右クリックメニューから「削除」</li>
+                    </ul>
+
+                    <h6><strong>ノードの種類</strong></h6>
+                    <ul>
+                        <li><strong>□ 処理:</strong> 一般的な処理ステップ</li>
+                        <li><strong>○ 開始/終了:</strong> プロセスの開始・終了点</li>
+                        <li><strong>◇ 判定:</strong> 条件分岐</li>
+                        <li><strong>⬢ 入力/出力:</strong> データの入出力</li>
+                    </ul>
+
+                    <h6><strong>ファイル操作</strong></h6>
+                    <ul>
+                        <li><strong>インポート:</strong> JSONファイルからチャートを読み込み</li>
+                        <li><strong>エクスポート:</strong> チャートをJSONファイルで保存</li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">閉じる</button>
                 </div>
             </div>
         </div>
