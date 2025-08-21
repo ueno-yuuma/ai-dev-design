@@ -464,6 +464,71 @@ body {
     min-height: 200px;
 }
 
+/* ノードコンテキストメニュー */
+.node-context-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    min-width: 160px;
+    display: none;
+    font-family: 'Noto Sans JP', sans-serif;
+}
+
+.node-context-menu.show {
+    display: block;
+}
+
+.menu-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.menu-item:first-child {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.menu-item:last-child {
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-bottom: none;
+}
+
+.menu-item:hover {
+    background-color: #f8f9fa;
+}
+
+.menu-item.delete:hover {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+.menu-item svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+/* ノードハイライト */
+.mermaid-container .node-rect.highlighted,
+.mermaid-container .node-circle.highlighted,
+.mermaid-container .node-diamond.highlighted,
+.mermaid-container .node-hexagon.highlighted {
+    stroke: #007bff !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 6px rgba(0, 123, 255, 0.3));
+}
+
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
     .left-sidebar {
@@ -477,5 +542,14 @@ body {
     .nav-tab {
         padding: 6px 12px;
         font-size: 12px;
+    }
+    
+    .node-context-menu {
+        min-width: 140px;
+    }
+    
+    .menu-item {
+        padding: 8px 12px;
+        font-size: 13px;
     }
 }

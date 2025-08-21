@@ -90,6 +90,11 @@ function ChartViewModel() {
     self.isDragging = ko.observable(false);
     self.lastMousePos = { x: 0, y: 0 };
     
+    // ノード選択・コンテキストメニュー関連
+    self.selectedNodeId = ko.observable(null);
+    self.selectedNodeElement = null;
+    self.contextMenuVisible = ko.observable(false);
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
@@ -400,7 +405,10 @@ function ChartViewModel() {
                     self.mermaidHtml(containerHtml);
                     
                     // Setup zoom and pan event listeners after rendering
-                    setTimeout(() => self.setupZoomAndPan(), 100);
+                    setTimeout(() => {
+                        self.setupZoomAndPan();
+                        self.setupNodeClickHandlers();
+                    }, 100);
                 })
                 .catch(error => {
                     console.error('Mermaidレンダリングエラー:', error);
@@ -493,6 +501,132 @@ function ChartViewModel() {
         self.panX(0);
         self.panY(0);
         self.updateMermaidTransform();
+    };
+    
+    // ノードクリックハンドラー設定
+    self.setupNodeClickHandlers = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return;
+        
+        // すべてのMermaidノードを取得
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        
+        nodes.forEach(node => {
+            // 既存のイベントリスナーを削除
+            node.removeEventListener('click', self.handleNodeClick);
+            
+            // 新しいイベントリスナーを追加
+            node.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                self.handleNodeClick(e, this);
+            });
+            
+            // ホバー効果
+            node.addEventListener('mouseenter', function() {
+                if (!self.isDragging()) {
+                    this.style.cursor = 'pointer';
+                }
+            });
+            
+            node.addEventListener('mouseleave', function() {
+                this.style.cursor = 'default';
+            });
+        });
+        
+        // クリック外しでメニューを閉じる
+        document.addEventListener('click', self.handleDocumentClick);
+    };
+    
+    // ノードクリック処理
+    self.handleNodeClick = function(event, nodeElement) {
+        const nodeId = self.extractNodeId(nodeElement);
+        if (!nodeId) return;
+        
+        // 選択状態を更新
+        self.clearNodeSelection();
+        self.selectedNodeId(nodeId);
+        self.selectedNodeElement = nodeElement;
+        self.highlightSelectedNode(nodeElement);
+        
+        // コンテキストメニューを表示
+        self.showContextMenu(event.clientX, event.clientY);
+    };
+    
+    // ノードIDを抽出
+    self.extractNodeId = function(nodeElement) {
+        const id = nodeElement.id;
+        if (id && id.startsWith('flowchart-')) {
+            // Mermaidが生成するIDから実際のノードIDを抽出
+            return id.replace('flowchart-', '').split('-')[0];
+        }
+        return null;
+    };
+    
+    // ノード選択をクリア
+    self.clearNodeSelection = function() {
+        const prevSelected = document.querySelector('.node-rect.highlighted, .node-circle.highlighted, .node-diamond.highlighted, .node-hexagon.highlighted');
+        if (prevSelected) {
+            prevSelected.classList.remove('highlighted');
+        }
+        self.selectedNodeId(null);
+        self.selectedNodeElement = null;
+    };
+    
+    // 選択されたノードをハイライト
+    self.highlightSelectedNode = function(nodeElement) {
+        const shapes = nodeElement.querySelectorAll('rect, circle, polygon, path');
+        shapes.forEach(shape => {
+            if (shape.classList.contains('node-rect') || 
+                shape.classList.contains('node-circle') || 
+                shape.classList.contains('node-diamond') || 
+                shape.classList.contains('node-hexagon') ||
+                shape.getAttribute('class')?.includes('node')) {
+                shape.classList.add('highlighted');
+            }
+        });
+    };
+    
+    // コンテキストメニュー表示
+    self.showContextMenu = function(x, y) {
+        const menu = document.getElementById('node-context-menu');
+        if (!menu) return;
+        
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+        menu.classList.add('show');
+        self.contextMenuVisible(true);
+        
+        // 画面外に出る場合の調整
+        setTimeout(() => {
+            const rect = menu.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            
+            if (rect.right > viewportWidth) {
+                menu.style.left = (x - rect.width) + 'px';
+            }
+            if (rect.bottom > viewportHeight) {
+                menu.style.top = (y - rect.height) + 'px';
+            }
+        }, 0);
+    };
+    
+    // コンテキストメニューを隠す
+    self.hideContextMenu = function() {
+        const menu = document.getElementById('node-context-menu');
+        if (menu) {
+            menu.classList.remove('show');
+        }
+        self.contextMenuVisible(false);
+    };
+    
+    // ドキュメントクリック処理
+    self.handleDocumentClick = function(event) {
+        const menu = document.getElementById('node-context-menu');
+        if (menu && !menu.contains(event.target)) {
+            self.hideContextMenu();
+        }
     };
     
     // 履歴管理
@@ -624,14 +758,251 @@ function ChartViewModel() {
         self.showError('AI最適化機能は実装予定です');
     };
     
-    // ノード更新
-    self.updateNode = function() {
-        self.showError('ノード更新機能は実装予定です');
+    // コンテキストメニュー機能
+    
+    // ノード編集
+    self.editNode = function() {
+        if (!self.selectedNodeId()) {
+            self.showError('編集するノードが選択されていません');
+            return;
+        }
+        
+        const currentText = self.getNodeText(self.selectedNodeId());
+        const newText = prompt('ノードのテキストを入力してください:', currentText);
+        
+        if (newText !== null && newText.trim() !== '' && newText !== currentText) {
+            self.updateNodeText(self.selectedNodeId(), newText.trim());
+            self.hideContextMenu();
+            self.showSuccess('ノードのテキストを更新しました');
+        }
     };
     
-    // ノード削除
+    // ノード複製
+    self.duplicateNode = function() {
+        if (!self.selectedNodeId()) {
+            self.showError('複製するノードが選択されていません');
+            return;
+        }
+        
+        const nodeInfo = self.getNodeInfo(self.selectedNodeId());
+        if (nodeInfo) {
+            const newNodeId = 'node_' + Date.now();
+            self.addNodeToMermaidCode(newNodeId, nodeInfo.text + ' (コピー)', nodeInfo.shape);
+            self.hideContextMenu();
+            self.showSuccess('ノードを複製しました');
+        }
+    };
+    
+    // ノード種類変更
+    self.changeNodeType = function() {
+        if (!self.selectedNodeId()) {
+            self.showError('種類を変更するノードが選択されていません');
+            return;
+        }
+        
+        const types = [
+            { value: 'rect', label: '□ 処理' },
+            { value: 'round', label: '○ 開始/終了' },
+            { value: 'diamond', label: '◇ 判定' },
+            { value: 'hexagon', label: '⬢ 入力/出力' }
+        ];
+        
+        let selection = prompt(
+            'ノードの種類を選択してください:\n' +
+            types.map((t, i) => `${i + 1}. ${t.label}`).join('\n') +
+            '\n\n番号を入力してください (1-4):'
+        );
+        
+        if (selection && selection >= 1 && selection <= 4) {
+            const selectedType = types[selection - 1];
+            self.changeNodeShape(self.selectedNodeId(), selectedType.value);
+            self.hideContextMenu();
+            self.showSuccess('ノードの種類を変更しました');
+        }
+    };
+    
+    // 接続追加
+    self.addConnection = function() {
+        if (!self.selectedNodeId()) {
+            self.showError('接続元のノードが選択されていません');
+            return;
+        }
+        
+        self.showError('接続追加機能は実装予定です');
+        self.hideContextMenu();
+    };
+    
+    // 選択されたノード削除
+    self.deleteSelectedNode = function() {
+        if (!self.selectedNodeId()) {
+            self.showError('削除するノードが選択されていません');
+            return;
+        }
+        
+        if (confirm(`ノード「${self.getNodeText(self.selectedNodeId())}」を削除しますか？`)) {
+            self.removeNodeFromMermaidCode(self.selectedNodeId());
+            self.hideContextMenu();
+            self.clearNodeSelection();
+            self.showSuccess('ノードを削除しました');
+        }
+    };
+    
+    // ヘルパー関数
+    
+    // ノードテキスト取得
+    self.getNodeText = function(nodeId) {
+        const code = self.currentMermaidCode();
+        const regex = new RegExp(nodeId + '\\[([^\\]]+)\\]', 'g');
+        const match = regex.exec(code);
+        return match ? match[1] : nodeId;
+    };
+    
+    // ノード情報取得
+    self.getNodeInfo = function(nodeId) {
+        const code = self.currentMermaidCode();
+        
+        // 矩形ノード [text]
+        let regex = new RegExp(nodeId + '\\[([^\\]]+)\\]', 'g');
+        let match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'rect' };
+        
+        // 丸ノード (text)
+        regex = new RegExp(nodeId + '\\(([^\\)]+)\\)', 'g');
+        match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'round' };
+        
+        // ダイヤモンドノード {text}
+        regex = new RegExp(nodeId + '\\{([^\\}]+)\\}', 'g');
+        match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'diamond' };
+        
+        // ヘキサゴンノード [[text]]
+        regex = new RegExp(nodeId + '\\[\\[([^\\]]+)\\]\\]', 'g');
+        match = regex.exec(code);
+        if (match) return { text: match[1], shape: 'hexagon' };
+        
+        return null;
+    };
+    
+    // ノードテキスト更新
+    self.updateNodeText = function(nodeId, newText) {
+        let code = self.currentMermaidCode();
+        
+        // 各形状のパターンでテキストを更新
+        const patterns = [
+            { regex: new RegExp(nodeId + '\\[([^\\]]+)\\]', 'g'), replacement: `${nodeId}[${newText}]` },
+            { regex: new RegExp(nodeId + '\\(([^\\)]+)\\)', 'g'), replacement: `${nodeId}(${newText})` },
+            { regex: new RegExp(nodeId + '\\{([^\\}]+)\\}', 'g'), replacement: `${nodeId}{${newText}}` },
+            { regex: new RegExp(nodeId + '\\[\\[([^\\]]+)\\]\\]', 'g'), replacement: `${nodeId}[[${newText}]]` }
+        ];
+        
+        patterns.forEach(pattern => {
+            code = code.replace(pattern.regex, pattern.replacement);
+        });
+        
+        self.currentMermaidCode(code);
+        self.addToHistory();
+    };
+    
+    // ノード形状変更
+    self.changeNodeShape = function(nodeId, newShape) {
+        let code = self.currentMermaidCode();
+        const nodeInfo = self.getNodeInfo(nodeId);
+        if (!nodeInfo) return;
+        
+        // 現在の形状を削除
+        const currentPatterns = [
+            new RegExp(nodeId + '\\[[^\\]]+\\]', 'g'),
+            new RegExp(nodeId + '\\([^\\)]+\\)', 'g'),
+            new RegExp(nodeId + '\\{[^\\}]+\\}', 'g'),
+            new RegExp(nodeId + '\\[\\[[^\\]]+\\]\\]', 'g')
+        ];
+        
+        currentPatterns.forEach(pattern => {
+            code = code.replace(pattern, '');
+        });
+        
+        // 新しい形状を追加
+        const shapes = {
+            'rect': `${nodeId}[${nodeInfo.text}]`,
+            'round': `${nodeId}(${nodeInfo.text})`,
+            'diamond': `${nodeId}{${nodeInfo.text}}`,
+            'hexagon': `${nodeId}[[${nodeInfo.text}]]`
+        };
+        
+        const newNodeDef = shapes[newShape];
+        if (newNodeDef) {
+            // グラフ定義の後に新しいノード定義を追加
+            code = code.replace(/graph TD\s*\n/, `graph TD\n    ${newNodeDef}\n`);
+        }
+        
+        self.currentMermaidCode(code);
+        self.addToHistory();
+    };
+    
+    // Mermaidコードにノード追加
+    self.addNodeToMermaidCode = function(nodeId, text, shape = 'rect') {
+        let code = self.currentMermaidCode();
+        
+        const shapes = {
+            'rect': `${nodeId}[${text}]`,
+            'round': `${nodeId}(${text})`,
+            'diamond': `${nodeId}{${text}}`,
+            'hexagon': `${nodeId}[[${text}]]`
+        };
+        
+        const nodeDefinition = shapes[shape];
+        if (nodeDefinition) {
+            if (code.includes('graph TD')) {
+                code += `\n    ${nodeDefinition}`;
+            } else {
+                code = `graph TD\n    ${nodeDefinition}`;
+            }
+            
+            self.currentMermaidCode(code);
+            self.addToHistory();
+        }
+    };
+    
+    // Mermaidコードからノード削除
+    self.removeNodeFromMermaidCode = function(nodeId) {
+        let code = self.currentMermaidCode();
+        
+        // ノード定義を削除
+        const nodePatterns = [
+            new RegExp(`\\s*${nodeId}\\[[^\\]]+\\]`, 'g'),
+            new RegExp(`\\s*${nodeId}\\([^\\)]+\\)`, 'g'),
+            new RegExp(`\\s*${nodeId}\\{[^\\}]+\\}`, 'g'),
+            new RegExp(`\\s*${nodeId}\\[\\[[^\\]]+\\]\\]`, 'g')
+        ];
+        
+        nodePatterns.forEach(pattern => {
+            code = code.replace(pattern, '');
+        });
+        
+        // ノードへの接続を削除
+        const connectionPatterns = [
+            new RegExp(`\\s*[A-Za-z0-9_]+\\s*-->\\s*${nodeId}`, 'g'),
+            new RegExp(`\\s*${nodeId}\\s*-->\\s*[A-Za-z0-9_]+`, 'g'),
+            new RegExp(`\\s*[A-Za-z0-9_]+\\s*->>\\s*${nodeId}`, 'g'),
+            new RegExp(`\\s*${nodeId}\\s*->>\\s*[A-Za-z0-9_]+`, 'g')
+        ];
+        
+        connectionPatterns.forEach(pattern => {
+            code = code.replace(pattern, '');
+        });
+        
+        self.currentMermaidCode(code);
+        self.addToHistory();
+    };
+    
+    // 従来のノード更新・削除関数（互換性のため）
+    self.updateNode = function() {
+        self.editNode();
+    };
+    
     self.deleteNode = function() {
-        self.showError('ノード削除機能は実装予定です');
+        self.deleteSelectedNode();
     };
     
     // エクスポート
