@@ -847,6 +847,8 @@ function ChartViewModel() {
     // ノードドラッグ終了
     self.handleNodeDragEnd = function(event) {
         const wasDragging = self.isNodeDragging();
+        const currentTime = Date.now();
+        const timeDiff = currentTime - self.dragStartTime;
         
         if (wasDragging) {
             // ドラッグ処理
@@ -870,8 +872,18 @@ function ChartViewModel() {
                 // 空の場所にドロップ - 新しいノードを作成
                 self.createChildNode(self.dragSourceNode.id, dropX, dropY);
             }
-        } else {
-            // 単純なクリック処理 - 何もしない（右クリックでメニュー表示）
+        } else if (self.dragSourceNode && timeDiff < 300) {
+            // 単純なクリック処理（300ms以内で移動距離が少ない場合）
+            const nodeId = self.dragSourceNode.id;
+            
+            if (event.ctrlKey || event.metaKey) {
+                // Ctrlキー押下時は選択を追加/削除
+                self.toggleNodeSelection(nodeId);
+            } else {
+                // 通常クリックは既存選択をクリアして新規選択
+                self.clearMultiSelection();
+                self.addNodeToSelection(nodeId);
+            }
         }
         
         // クリーンアップ
@@ -1883,6 +1895,30 @@ function ChartViewModel() {
         });
         
         self.selectedNodes(allNodeIds);
+        self.updateNodeSelection();
+    };
+    
+    // 単一ノードを選択に追加
+    self.addNodeToSelection = function(nodeId) {
+        if (self.selectedNodes().indexOf(nodeId) === -1) {
+            self.selectedNodes.push(nodeId);
+            self.updateNodeSelection();
+        }
+    };
+    
+    // ノード選択の切り替え（選択済みの場合は解除、未選択の場合は追加）
+    self.toggleNodeSelection = function(nodeId) {
+        const currentSelection = self.selectedNodes();
+        const index = currentSelection.indexOf(nodeId);
+        
+        if (index !== -1) {
+            // 既に選択されている場合は削除
+            self.selectedNodes.splice(index, 1);
+        } else {
+            // 選択されていない場合は追加
+            self.selectedNodes.push(nodeId);
+        }
+        
         self.updateNodeSelection();
     };
 }
