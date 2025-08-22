@@ -124,6 +124,13 @@ const uiComponent = {
     showSettings: function() {
         this.showError('設定機能は実装予定です');
     },
+    showMermaidCode: function() {
+        if (!this.currentChart()) {
+            this.showError('表示するチャートがありません');
+            return;
+        }
+        $('#code-editor-modal').modal('show');
+    },
     detailNode: function() {
         if (!this.selectedNode()) {
             this.showError('詳細化するノードを選択してください');
