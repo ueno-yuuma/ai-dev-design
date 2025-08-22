@@ -111,8 +111,8 @@ function ChartViewModel() {
     self.selectedNodesCount = ko.computed(function() {
         return self.selectedNodes().length;
     });
-    self.selectionStart = { x: 0, y: 0 };
-    self.selectionCurrent = { x: 0, y: 0 };
+    self.selectionStart = null;
+    self.selectionCurrent = null;
     self.selectionRectangle = null;
     
     // レンダリング制御フラグ
@@ -520,9 +520,10 @@ function ChartViewModel() {
                 y: e.clientY - rect.top
             };
             
-            // Ctrlキーが押されていない場合は既存の選択をクリア
+            // Ctrlキーが押されていない場合は既存の選択をクリア（座標はリセットしない）
             if (!e.ctrlKey && !e.metaKey) {
-                self.clearMultiSelection();
+                self.selectedNodes([]);
+                self.updateNodeSelection();
             }
             
             self.isSelecting(true);
@@ -587,7 +588,38 @@ function ChartViewModel() {
                 mermaidDisplay.classList.remove('panning');
             }
         } else if (e.button === 0 && self.isSelecting()) { // Left mouse button - 選択終了
-            self.finishSelection();
+            // 実際にドラッグ（移動）があったかチェック
+            const hasActualDrag = self.selectionCurrent && 
+                                  self.selectionStart &&
+                                  (Math.abs(self.selectionCurrent.x - self.selectionStart.x) > 5 ||
+                                   Math.abs(self.selectionCurrent.y - self.selectionStart.y) > 5);
+            
+            if (hasActualDrag) {
+                self.finishSelection();
+            } else {
+                // 単一クリックの場合は選択をキャンセル
+                self.isSelecting(false);
+                self.selectionStart = null;
+                self.selectionCurrent = null;
+                
+                // UI要素をクリア
+                const selectionRect = document.getElementById('selection-rectangle');
+                if (selectionRect) {
+                    selectionRect.classList.remove('active');
+                }
+                
+                const chartCanvas = document.getElementById('chart-canvas');
+                if (chartCanvas) {
+                    chartCanvas.classList.remove('selecting');
+                }
+                
+                // 既存の選択も単一クリック時はクリア（Ctrlキーが押されていない場合）
+                if (!e.ctrlKey && !e.metaKey) {
+                    self.selectedNodes([]);
+                    self.updateNodeSelection();
+                }
+            }
+            
             e.preventDefault();
         }
     };
@@ -1748,6 +1780,7 @@ function ChartViewModel() {
         const width = Math.abs(self.selectionCurrent.x - self.selectionStart.x);
         const height = Math.abs(self.selectionCurrent.y - self.selectionStart.y);
         
+        
         selectionRect.style.left = startX + 'px';
         selectionRect.style.top = startY + 'px';
         selectionRect.style.width = width + 'px';
@@ -1771,6 +1804,8 @@ function ChartViewModel() {
         
         // 選択状態をクリア
         self.isSelecting(false);
+        self.selectionStart = null;
+        self.selectionCurrent = null;
         
         // UI要素をクリア
         const selectionRect = document.getElementById('selection-rectangle');
@@ -1824,6 +1859,25 @@ function ChartViewModel() {
     // 複数選択をクリア
     self.clearMultiSelection = function() {
         self.selectedNodes([]);
+        
+        // 選択中の場合のみ座標とUI状態をリセット
+        if (self.isSelecting()) {
+            self.isSelecting(false);
+            self.selectionStart = null;
+            self.selectionCurrent = null;
+            
+            // UI要素をクリア
+            const selectionRect = document.getElementById('selection-rectangle');
+            if (selectionRect) {
+                selectionRect.classList.remove('active');
+            }
+            
+            const chartCanvas = document.getElementById('chart-canvas');
+            if (chartCanvas) {
+                chartCanvas.classList.remove('selecting');
+            }
+        }
+        
         self.updateNodeSelection();
     };
     
