@@ -67,8 +67,6 @@ const dndComponent = {
                 const targetNodeId = this.extractNodeId(targetNode);
                 if (targetNodeId) {
                     this.createConnection(this.dragSourceNode.id, targetNodeId);
-                    this.addToHistory(`接続追加: ${this.dragSourceNode.id} -> ${targetNodeId}`);
-                    this.showSuccess('ノード間に接続を作成しました');
                 }
             } else {
                 this.createChildNode(this.dragSourceNode.id, dropX, dropY);
@@ -158,15 +156,20 @@ const dndComponent = {
     createConnection: function(sourceId, targetId) {
         let code = this.currentMermaidCode();
 
-        const connectionPattern = new RegExp(`${sourceId}\\s*-->\\s*${targetId}`, 'g');
+        const connectionPattern = new RegExp(`\\s*${sourceId}\\s*-->\\s*${targetId}`, 'g');
         if (connectionPattern.test(code)) {
-            this.showError('この接続は既に存在します');
-            return;
+            // Connection exists, remove it
+            code = code.replace(connectionPattern, '');
+            this.currentMermaidCode(code);
+            this.addToHistory(`接続削除: ${sourceId} -> ${targetId}`);
+            this.showSuccess('ノード間の接続を削除しました');
+        } else {
+            // Connection doesn't exist, add it
+            code += `\n    ${sourceId} --> ${targetId}`;
+            this.currentMermaidCode(code);
+            this.addToHistory(`接続追加: ${sourceId} -> ${targetId}`);
+            this.showSuccess('ノード間に接続を作成しました');
         }
-
-        code += `\n    ${sourceId} --> ${targetId}`;
-
-        this.currentMermaidCode(code);
     },
     createChildNode: function(parentId, x, y) {
         const newNodeId = 'node_' + Date.now();
