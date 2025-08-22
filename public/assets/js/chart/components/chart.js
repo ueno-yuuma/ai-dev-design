@@ -1,4 +1,12 @@
 const chartComponent = {
+    isActionAllowed: function() {
+        const now = Date.now();
+        if (now - this.lastActionTime < this.actionDebounceDelay) {
+            return false;
+        }
+        this.lastActionTime = now;
+        return true;
+    },
     loadCharts: function() {
         if (!this.isAuthenticated()) return;
 
@@ -18,6 +26,11 @@ const chartComponent = {
             });
     },
     createNewChart: function() {
+        // デバウンス・処理中チェック
+        if (!this.isActionAllowed() || this.isLoading() || this.isRendering()) {
+            return;
+        }
+
         const newChart = {
             id: null,
             title: '新しいフローチャート',
@@ -69,6 +82,16 @@ const chartComponent = {
         });
     },
     loadChart: function(chart) {
+        // デバウンス・処理中チェック
+        if (!this.isActionAllowed() || this.isLoading() || this.isRendering()) {
+            return;
+        }
+
+        // 同じチャートの重複読み込みを防止
+        if (this.currentChart() && this.currentChart().id === chart.id) {
+            return;
+        }
+
         this.currentChart(chart);
         this.currentChartTitle(chart.title);
         this.currentMermaidCode(chart.content);
