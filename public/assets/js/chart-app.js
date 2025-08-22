@@ -1078,15 +1078,87 @@ function ChartViewModel() {
         const newNodeId = 'node_' + Date.now();
         const newNodeLabel = '新しいノード';
         
-        let code = self.currentMermaidCode();
+        // 親ノードがsubgraph内にあるかチェック
+        const parentSubgraph = self.getNodeSubgraph(parentId);
         
-        // 新しいノードと接続を追加
-        code += `\n    ${newNodeId}[${newNodeLabel}]`;
-        code += `\n    ${parentId} --> ${newNodeId}`;
+        // ドロップ位置がsubgraph内かチェック
+        const dropTargetSubgraph = self.getDropTargetSubgraph(x, y);
+        
+        let code = self.currentMermaidCode();
+        let message = '';
+        
+        if (parentSubgraph && dropTargetSubgraph && parentSubgraph.id === dropTargetSubgraph.id) {
+            // 同じsubgraph内でのドロップ: subgraph内に新ノード追加
+            code = self.addNodeToSubgraph(code, newNodeId, newNodeLabel, parentSubgraph.id);
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${parentSubgraph.name}グループ内に新しいノードを作成しました`;
+            
+        } else if (parentSubgraph && !dropTargetSubgraph) {
+            // subgraph内のノードからsubgraph外へのドロップ: subgraph外に新ノード追加
+            code += `\n    ${newNodeId}[${newNodeLabel}]`;
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${parentSubgraph.name}グループからグループ外に新しいノードを作成しました`;
+            
+        } else if (parentSubgraph && dropTargetSubgraph && parentSubgraph.id !== dropTargetSubgraph.id) {
+            // 異なるsubgraph間でのドロップ: ドロップ先のsubgraph内に新ノード追加
+            code = self.addNodeToSubgraph(code, newNodeId, newNodeLabel, dropTargetSubgraph.id);
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${parentSubgraph.name}グループから${dropTargetSubgraph.name}グループに新しいノードを作成しました`;
+            
+        } else if (!parentSubgraph && dropTargetSubgraph) {
+            // subgraph外のノードからsubgraph内へのドロップ: subgraph内に新ノード追加
+            code = self.addNodeToSubgraph(code, newNodeId, newNodeLabel, dropTargetSubgraph.id);
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${dropTargetSubgraph.name}グループ内に新しいノードを作成しました`;
+            
+        } else {
+            // 通常のケース: subgraph外に新ノード追加
+            code += `\n    ${newNodeId}[${newNodeLabel}]`;
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = '新しい子ノードを作成しました';
+        }
         
         self.currentMermaidCode(code);
         self.addToHistory(`子ノード追加: ${parentId} -> ${newNodeId}`);
-        self.showSuccess('新しい子ノードを作成しました');
+        self.showSuccess(message);
+    };
+    
+    // subgraph内にノードを追加
+    self.addNodeToSubgraph = function(mermaidCode, nodeId, nodeLabel, subgraphId) {
+        const lines = mermaidCode.split('\n');
+        const resultLines = [];
+        let inTargetSubgraph = false;
+        let subgraphLevel = 0;
+        let insertIndex = -1;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            // subgraphの開始を検出
+            if (trimmedLine.startsWith('subgraph')) {
+                subgraphLevel++;
+                if (trimmedLine.includes(subgraphId)) {
+                    inTargetSubgraph = true;
+                }
+                resultLines.push(line);
+            }
+            // subgraphの終了を検出
+            else if (trimmedLine === 'end' && subgraphLevel > 0) {
+                if (inTargetSubgraph && subgraphLevel === 1) {
+                    // このsubgraphの終了前に新ノードを挿入
+                    resultLines.push(`        ${nodeId}[${nodeLabel}]`);
+                    inTargetSubgraph = false;
+                }
+                subgraphLevel--;
+                resultLines.push(line);
+            }
+            else {
+                resultLines.push(line);
+            }
+        }
+        
+        return resultLines.join('\n');
     };
     
     // ノードドロップ処理
@@ -2169,6 +2241,90 @@ function ChartViewModel() {
             console.error('グループ化処理エラー:', error);
             return mermaidCode; // エラーの場合は元のコードを返す
         }
+    };
+    
+    // ノードがsubgraph内にあるかどうかを判定
+    self.getNodeSubgraph = function(nodeId) {
+        const mermaidCode = self.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+        
+        let currentSubgraph = null;
+        let subgraphLevel = 0;
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            // subgraphの開始を検出
+            if (trimmedLine.startsWith('subgraph')) {
+                subgraphLevel++;
+                if (subgraphLevel === 1) {
+                    // subgraph ID と名前を抽出
+                    const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
+                    if (match) {
+                        currentSubgraph = {
+                            id: match[1],
+                            name: match[2] || match[1]
+                        };
+                    }
+                }
+            }
+            // subgraphの終了を検出
+            else if (trimmedLine === 'end' && subgraphLevel > 0) {
+                subgraphLevel--;
+                if (subgraphLevel === 0) {
+                    currentSubgraph = null;
+                }
+            }
+            // ノード定義を検出
+            else if (currentSubgraph && subgraphLevel === 1) {
+                if (trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) {
+                    return currentSubgraph;
+                }
+            }
+        }
+        
+        return null; // subgraph外にある
+    };
+    
+    // ドロップ位置がsubgraph内かどうかを判定
+    self.getDropTargetSubgraph = function(dropX, dropY) {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return null;
+        
+        // subgraphの要素を取得
+        const subgraphs = mermaidContainer.querySelectorAll('g.cluster');
+        
+        for (const subgraph of subgraphs) {
+            const rect = subgraph.getBoundingClientRect();
+            const mermaidDisplayRect = document.getElementById('mermaid-display').getBoundingClientRect();
+            
+            // subgraphの境界を計算
+            const subgraphX = rect.left - mermaidDisplayRect.left;
+            const subgraphY = rect.top - mermaidDisplayRect.top;
+            const subgraphWidth = rect.width;
+            const subgraphHeight = rect.height;
+            
+            // ドロップ位置がsubgraph内にあるかチェック
+            if (dropX >= subgraphX && dropX <= subgraphX + subgraphWidth &&
+                dropY >= subgraphY && dropY <= subgraphY + subgraphHeight) {
+                
+                // subgraph IDを取得
+                const subgraphId = subgraph.id;
+                if (subgraphId) {
+                    // subgraph名を取得
+                    const labelElement = subgraph.querySelector('text');
+                    const subgraphName = labelElement ? labelElement.textContent : subgraphId;
+                    
+                    return {
+                        id: subgraphId,
+                        name: subgraphName,
+                        element: subgraph
+                    };
+                }
+            }
+        }
+        
+        return null; // subgraph外
     };
 }
 
