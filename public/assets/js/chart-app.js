@@ -2036,10 +2036,139 @@ function ChartViewModel() {
             return;
         }
         
-        // グループ化機能の実装（将来的に拡張予定）
-        self.showSuccess(`${selectedCount}個のノードをグループ化しました`);
+        // グループ名をユーザーに入力してもらう
+        const groupName = prompt('グループ名を入力してください:', `グループ${Date.now()}`);
+        if (!groupName) {
+            return; // キャンセルされた場合
+        }
+        
+        // 現在のMermaidコードを取得
+        let mermaidCode = self.currentMermaidCode();
+        
+        // 選択されたノード群をsubgraphで囲む
+        const groupedCode = self.wrapNodesInSubgraph(mermaidCode, self.selectedNodes(), groupName);
+        
+        if (groupedCode !== mermaidCode) {
+            // 自動レンダリングを一時的に無効化
+            self.suppressAutoRender = true;
+            
+            // Mermaidコードを更新
+            self.currentMermaidCode(groupedCode);
+            
+            // 自動レンダリングを復元して手動レンダリング
+            self.suppressAutoRender = false;
+            self.renderMermaid();
+            
+            // 選択をクリア
+            self.clearMultiSelection();
+            
+            self.showSuccess(`${selectedCount}個のノードを「${groupName}」グループにまとめました`);
+            self.addToHistory(`ノードグループ化: ${groupName}`);
+        } else {
+            self.showError('グループ化に失敗しました');
+        }
+        
         self.hideContextMenu();
-        self.addToHistory(`ノードグループ化: ${selectedCount}個`);
+    };
+    
+    // ノード群をsubgraphで囲む
+    self.wrapNodesInSubgraph = function(mermaidCode, nodeIds, groupName) {
+        try {
+            const lines = mermaidCode.split('\n');
+            const resultLines = [];
+            const processedNodes = new Set();
+            let inSubgraph = false;
+            let subgraphLevel = 0;
+            
+            // subgraphの開始を挿入する位置を見つける
+            let insertIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // flowchartの宣言行をスキップ
+                if (line.startsWith('flowchart') || line.startsWith('graph')) {
+                    resultLines.push(lines[i]);
+                    continue;
+                }
+                
+                // subgraphの開始/終了を追跡
+                if (line.startsWith('subgraph')) {
+                    inSubgraph = true;
+                    subgraphLevel++;
+                    resultLines.push(lines[i]);
+                    continue;
+                } else if (line === 'end' && inSubgraph) {
+                    subgraphLevel--;
+                    if (subgraphLevel === 0) {
+                        inSubgraph = false;
+                    }
+                    resultLines.push(lines[i]);
+                    continue;
+                }
+                
+                // 空行やコメントをスキップ
+                if (line === '' || line.startsWith('%%')) {
+                    resultLines.push(lines[i]);
+                    continue;
+                }
+                
+                // subgraphの開始位置を決定（最初の有効なノード定義の前）
+                if (insertIndex === -1 && !inSubgraph && line.includes('[') && line.includes(']')) {
+                    insertIndex = resultLines.length;
+                }
+                
+                // 選択されたノードの定義行かチェック
+                let isSelectedNodeLine = false;
+                for (const nodeId of nodeIds) {
+                    if (line.includes(`${nodeId}[`) || line.includes(`${nodeId}(`)) {
+                        isSelectedNodeLine = true;
+                        processedNodes.add(nodeId);
+                        break;
+                    }
+                }
+                
+                // 選択されたノードの場合は後で処理するためスキップ
+                if (isSelectedNodeLine && !inSubgraph) {
+                    continue;
+                }
+                
+                resultLines.push(lines[i]);
+            }
+            
+            // subgraphの開始位置が見つからない場合は最後に追加
+            if (insertIndex === -1) {
+                insertIndex = resultLines.length;
+            }
+            
+            // subgraphを挿入
+            const subgraphLines = [];
+            subgraphLines.push(`    subgraph ${groupName.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()} ["${groupName}"]`);
+            
+            // 選択されたノードの定義を収集
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine === '' || trimmedLine.startsWith('%%')) continue;
+                
+                for (const nodeId of nodeIds) {
+                    if ((trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) && 
+                        !trimmedLine.startsWith('subgraph') && trimmedLine !== 'end') {
+                        subgraphLines.push(`        ${trimmedLine}`);
+                        break;
+                    }
+                }
+            }
+            
+            subgraphLines.push('    end');
+            
+            // subgraphを適切な位置に挿入
+            resultLines.splice(insertIndex, 0, ...subgraphLines);
+            
+            return resultLines.join('\n');
+            
+        } catch (error) {
+            console.error('グループ化処理エラー:', error);
+            return mermaidCode; // エラーの場合は元のコードを返す
+        }
     };
 }
 
