@@ -336,6 +336,21 @@
             console.error('ERROR: Google Client ID is empty or not configured');
         }
     </script>
-    <script src="/assets/js/chart-app.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/config.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/utils.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/api.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/auth.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/chart.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/dnd.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/history.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/import_export.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/inline_edit.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/mermaid.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/node.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/selection.js?v=<?php echo time(); ?>"></script>
+<script src="/assets/js/chart/components/ui.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/zoom.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/chartViewModel.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/app.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
