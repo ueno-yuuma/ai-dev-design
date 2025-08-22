@@ -10,7 +10,7 @@ function ChartViewModel() {
     // チャート関連
     self.currentChart = ko.observable(null);
     self.currentChartTitle = ko.observable('');
-    self.currentMermaidCode = ko.observable('graph TD\n    A[開始] --> B[処理]\n    B --> C[終了]');
+    self.currentMermaidCode = ko.observable('graph LR\n    A[開始] --> B[処理]\n    B --> C[終了]');
     self.mermaidHtml = ko.observable('');
     self.savedCharts = ko.observableArray([]);
 
@@ -45,6 +45,10 @@ function ChartViewModel() {
     self.contextMenuVisible = ko.observable(false);
     self.isInlineEditing = ko.observable(false);
     self.inlineEditorType = null; // 'text' or 'type'
+    
+    // サブグラフ関連
+    self.currentSubgraph = ko.observable(null);
+    self.subgraphContextMenuVisible = ko.observable(false);
 
     // ノード間ドラッグ&ドロップ関連
     self.isNodeDragging = ko.observable(false);
@@ -63,6 +67,7 @@ function ChartViewModel() {
     self.selectionStart = null;
     self.selectionCurrent = null;
     self.selectionRectangle = null;
+
 
     // レンダリング制御フラグ
     self.suppressAutoRender = false;
@@ -116,6 +121,28 @@ function ChartViewModel() {
             self.renderMermaid();
         }
     });
+    
+    // サブグラフ関連のメソッド
+    self.renameSubgraph = function() {
+        if (self.currentSubgraph()) {
+            selectionComponent.renameSubgraph.call(self, self.currentSubgraph());
+            self.hideContextMenu();
+        }
+    };
+    
+    self.ungroupSubgraph = function() {
+        if (self.currentSubgraph()) {
+            selectionComponent.ungroupSubgraph.call(self, self.currentSubgraph());
+            self.hideContextMenu();
+        }
+    };
+    
+    self.deleteSubgraph = function() {
+        if (self.currentSubgraph()) {
+            selectionComponent.deleteSubgraph.call(self, self.currentSubgraph());
+            self.hideContextMenu();
+        }
+    };
 }
 
 // メソッドをプロトタイプにマージ

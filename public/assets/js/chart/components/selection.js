@@ -172,193 +172,66 @@ const selectionComponent = {
 
         this.updateNodeSelection();
     },
+    
+    // Grouping functionality is now delegated to groupingComponent
     groupSelectedNodes: function() {
-        const selectedCount = this.selectedNodes().length;
-        if (selectedCount < 2) {
-            this.showError('グループ化するには2個以上のノードを選択してください');
-            return;
-        }
-
-        const groupName = prompt('グループ名を入力してください:', `グループ${Date.now()}`);
-        if (!groupName) {
-            return;
-        }
-
-        let mermaidCode = this.currentMermaidCode();
-        const groupedCode = this.wrapNodesInSubgraph(mermaidCode, this.selectedNodes(), groupName);
-
-        if (groupedCode !== mermaidCode) {
-            this.suppressAutoRender = true;
-            this.currentMermaidCode(groupedCode);
-            this.suppressAutoRender = false;
-            this.renderMermaid();
-
-            this.clearMultiSelection();
-
-            this.showSuccess(`${selectedCount}個のノードを「${groupName}」グループにまとめました`);
-            this.addToHistory(`ノードグループ化: ${groupName}`);
-        } else {
-            this.showError('グループ化に失敗しました');
-        }
-
-        this.hideContextMenu();
+        return groupingComponent.groupSelectedNodes.call(this);
     },
-    wrapNodesInSubgraph: function(mermaidCode, nodeIds, groupName) {
-        try {
-            const lines = mermaidCode.split('\n');
-            const resultLines = [];
-            const processedNodes = new Set();
-            let inSubgraph = false;
-            let subgraphLevel = 0;
-
-            let insertIndex = -1;
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-
-                if (line.startsWith('flowchart') || line.startsWith('graph')) {
-                    resultLines.push(lines[i]);
-                    continue;
-                }
-
-                if (line.startsWith('subgraph')) {
-                    inSubgraph = true;
-                    subgraphLevel++;
-                    resultLines.push(lines[i]);
-                    continue;
-                } else if (line === 'end' && inSubgraph) {
-                    subgraphLevel--;
-                    if (subgraphLevel === 0) {
-                        inSubgraph = false;
-                    }
-                    resultLines.push(lines[i]);
-                    continue;
-                }
-
-                if (line === '' || line.startsWith('%%')) {
-                    resultLines.push(lines[i]);
-                    continue;
-                }
-
-                if (insertIndex === -1 && !inSubgraph && line.includes('[') && line.includes(']')) {
-                    insertIndex = resultLines.length;
-                }
-
-                let isSelectedNodeLine = false;
-                for (const nodeId of nodeIds) {
-                    if (line.includes(`${nodeId}[`) || line.includes(`${nodeId}(`)) {
-                        isSelectedNodeLine = true;
-                        processedNodes.add(nodeId);
-                        break;
-                    }
-                }
-
-                if (isSelectedNodeLine && !inSubgraph) {
-                    continue;
-                }
-
-                resultLines.push(lines[i]);
-            }
-
-            if (insertIndex === -1) {
-                insertIndex = resultLines.length;
-            }
-
-            const subgraphLines = [];
-            subgraphLines.push(`    subgraph ${groupName.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()} ["${groupName}"]`);
-
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (trimmedLine === '' || trimmedLine.startsWith('%%')) continue;
-
-                for (const nodeId of nodeIds) {
-                    if ((trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) &&
-                        !trimmedLine.startsWith('subgraph') && trimmedLine !== 'end') {
-                        subgraphLines.push(`        ${trimmedLine}`);
-                        break;
-                    }
-                }
-            }
-
-            subgraphLines.push('    end');
-
-            resultLines.splice(insertIndex, 0, ...subgraphLines);
-
-            return resultLines.join('\n');
-
-        } catch (error) {
-            console.error('グループ化処理エラー:', error);
-            return mermaidCode;
-        }
+    
+    wrapNodesInSubgraph: function(mermaidCode, nodeIds, groupName, nodeSubgraphInfo) {
+        return groupingComponent.wrapNodesInSubgraph.call(this, mermaidCode, nodeIds, groupName, nodeSubgraphInfo);
     },
+    
+    extractSelectedNodeContent: function(lines, nodeIds) {
+        return groupingComponent.extractSelectedNodeContent.call(this, lines, nodeIds);
+    },
+    
+    detectExternalConnections: function(lines, nodeIds) {
+        return groupingComponent.detectExternalConnections.call(this, lines, nodeIds);
+    },
+    
+    generateExternalConnections: function(externalConnections, subgraphId) {
+        return groupingComponent.generateExternalConnections.call(this, externalConnections, subgraphId);
+    },
+    
+    generateSubgraph: function(groupName, selectedContent, baseIndent, nodeIndent) {
+        return groupingComponent.generateSubgraph.call(this, groupName, selectedContent, baseIndent, nodeIndent);
+    },
+    
+    removeSelectedNodes: function(lines, nodeIds, targetNestLevel) {
+        return groupingComponent.removeSelectedNodes.call(this, lines, nodeIds, targetNestLevel);
+    },
+    
+    insertSubgraphAtCorrectPosition: function(cleanedLines, newSubgraph, targetNestLevel) {
+        return groupingComponent.insertSubgraphAtCorrectPosition.call(this, cleanedLines, newSubgraph, targetNestLevel);
+    },
+    
+    detectNodeSubgraphs: function(nodeIds) {
+        return groupingComponent.detectNodeSubgraphs.call(this, nodeIds);
+    },
+    
     getNodeSubgraph: function(nodeId) {
-        const mermaidCode = this.currentMermaidCode();
-        const lines = mermaidCode.split('\n');
-
-        let currentSubgraph = null;
-        let subgraphLevel = 0;
-
-        for (const line of lines) {
-            const trimmedLine = line.trim();
-
-            if (trimmedLine.startsWith('subgraph')) {
-                subgraphLevel++;
-                if (subgraphLevel === 1) {
-                    const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
-                    if (match) {
-                        currentSubgraph = {
-                            id: match[1],
-                            name: match[2] || match[1]
-                        };
-                    }
-                }
-            }
-            else if (trimmedLine === 'end' && subgraphLevel > 0) {
-                subgraphLevel--;
-                if (subgraphLevel === 0) {
-                    currentSubgraph = null;
-                }
-            }
-            else if (currentSubgraph && subgraphLevel === 1) {
-                if (trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) {
-                    return currentSubgraph;
-                }
-            }
-        }
-
-        return null;
+        return groupingComponent.getNodeSubgraph.call(this, nodeId);
     },
+    
     getDropTargetSubgraph: function(dropX, dropY) {
-        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
-        if (!mermaidContainer) return null;
-
-        const subgraphs = mermaidContainer.querySelectorAll('g.cluster');
-
-        for (const subgraph of subgraphs) {
-            const rect = subgraph.getBoundingClientRect();
-            const mermaidDisplayRect = document.getElementById('mermaid-display').getBoundingClientRect();
-
-            const subgraphX = rect.left - mermaidDisplayRect.left;
-            const subgraphY = rect.top - mermaidDisplayRect.top;
-            const subgraphWidth = rect.width;
-            const subgraphHeight = rect.height;
-
-            if (dropX >= subgraphX && dropX <= subgraphX + subgraphWidth &&
-                dropY >= subgraphY && dropY <= subgraphY + subgraphHeight) {
-
-                const subgraphId = subgraph.id;
-                if (subgraphId) {
-                    const labelElement = subgraph.querySelector('text');
-                    const subgraphName = labelElement ? labelElement.textContent : subgraphId;
-
-                    return {
-                        id: subgraphId,
-                        name: subgraphName,
-                        element: subgraph
-                    };
-                }
-            }
-        }
-
-        return null;
+        return groupingComponent.getDropTargetSubgraph.call(this, dropX, dropY);
+    },
+    
+    // サブグラフ関連のメソッド（groupingComponentに委譲）
+    detectSubgraphClick: function(x, y) {
+        return groupingComponent.detectSubgraphClick.call(this, x, y);
+    },
+    
+    renameSubgraph: function(subgraphInfo) {
+        return groupingComponent.renameSubgraph.call(this, subgraphInfo);
+    },
+    
+    ungroupSubgraph: function(subgraphInfo) {
+        return groupingComponent.ungroupSubgraph.call(this, subgraphInfo);
+    },
+    
+    deleteSubgraph: function(subgraphInfo) {
+        return groupingComponent.deleteSubgraph.call(this, subgraphInfo);
     }
 };

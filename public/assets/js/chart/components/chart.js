@@ -21,7 +21,7 @@ const chartComponent = {
         const newChart = {
             id: null,
             title: '新しいフローチャート',
-            content: 'graph TD\n    A[開始] --> B[処理]\n    B --> C[終了]',
+            content: 'graph LR\n    A[開始] --> B[処理]\n    B --> C[終了]',
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
         };

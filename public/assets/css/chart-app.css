@@ -480,7 +480,7 @@ body {
 }
 
 /* ノードコンテキストメニュー */
-.node-context-menu, .multi-node-context-menu {
+.node-context-menu, .multi-node-context-menu, .subgraph-context-menu {
     position: absolute;
     background: white;
     border: 1px solid #ddd;
@@ -492,7 +492,7 @@ body {
     font-family: 'Noto Sans JP', sans-serif;
 }
 
-.node-context-menu.show, .multi-node-context-menu.show {
+.node-context-menu.show, .multi-node-context-menu.show, .subgraph-context-menu.show {
     display: block;
 }
 
@@ -519,6 +519,31 @@ body {
     width: 16px;
     height: 16px;
     color: #007bff;
+}
+
+/* サブグラフ用コンテキストメニューの特別なスタイル */
+.subgraph-context-menu {
+    min-width: 200px;
+}
+
+.subgraph-context-menu .menu-header {
+    padding: 12px 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subgraph-context-menu .menu-header svg {
+    width: 16px;
+    height: 16px;
+    color: #28a745;
 }
 
 .menu-item {

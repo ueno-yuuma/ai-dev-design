@@ -50,6 +50,26 @@ const nodeComponent = {
         if (mermaidDisplay) {
             mermaidDisplay.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
+                
+                // ノードがクリックされていない場合、サブグラフのクリックを検出
+                const target = e.target;
+                const isNode = target.closest('g.node');
+                
+                if (!isNode) {
+                    const rect = mermaidDisplay.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const subgraphInfo = this.detectSubgraphClick(x, y);
+                    if (subgraphInfo) {
+                        this.handleSubgraphRightClick(e, subgraphInfo);
+                    } else {
+                        // 空の場所のクリック
+                        this.hideContextMenu();
+                        this.clearNodeSelection();
+                        this.clearMultiSelection();
+                    }
+                }
             });
         }
     },
@@ -70,6 +90,17 @@ const nodeComponent = {
         }
 
         this.showContextMenu(event.clientX, event.clientY);
+    },
+    handleSubgraphRightClick: function(event, subgraphInfo) {
+        // ノード選択をクリア
+        this.clearNodeSelection();
+        this.clearMultiSelection();
+        
+        // サブグラフ情報を設定
+        this.currentSubgraph(subgraphInfo);
+        
+        // サブグラフ用コンテキストメニューを表示
+        this.showSubgraphContextMenu(event.clientX, event.clientY);
     },
     extractNodeId: function(nodeElement) {
         const id = nodeElement.id;
@@ -181,7 +212,7 @@ const nodeComponent = {
 
         const newNodeDef = shapes[newShape];
         if (newNodeDef) {
-            code = code.replace(/graph TD\s*\n/, `graph TD\n    ${newNodeDef}\n`);
+            code = code.replace(/graph (TD|LR)\s*\n/, `graph LR\n    ${newNodeDef}\n`);
         }
 
         this.currentMermaidCode(code);
@@ -225,10 +256,10 @@ const nodeComponent = {
 
         let currentCode = this.currentMermaidCode();
 
-        if (currentCode.includes('graph TD')) {
+        if (currentCode.includes('graph TD') || currentCode.includes('graph LR')) {
             currentCode += `\n    ${nodeId}[${nodeLabel}]`;
         } else {
-            currentCode = `graph TD\n    ${nodeId}[${nodeLabel}]`;
+            currentCode = `graph LR\n    ${nodeId}[${nodeLabel}]`;
         }
 
         this.currentMermaidCode(currentCode);

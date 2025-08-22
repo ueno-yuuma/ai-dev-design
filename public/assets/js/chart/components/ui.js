@@ -35,6 +35,7 @@ const uiComponent = {
     hideContextMenu: function() {
         const singleMenu = document.getElementById('node-context-menu');
         const multiMenu = document.getElementById('multi-node-context-menu');
+        const subgraphMenu = document.getElementById('subgraph-context-menu');
 
         if (singleMenu) {
             singleMenu.classList.remove('show');
@@ -42,15 +43,32 @@ const uiComponent = {
         if (multiMenu) {
             multiMenu.classList.remove('show');
         }
+        if (subgraphMenu) {
+            subgraphMenu.classList.remove('show');
+        }
 
         this.contextMenuVisible(false);
+        this.subgraphContextMenuVisible(false);
+    },
+    showSubgraphContextMenu: function(x, y) {
+        this.hideContextMenu(); // 他のメニューを隠す
+        
+        const menu = document.getElementById('subgraph-context-menu');
+        if (menu) {
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+            menu.classList.add('show');
+            this.subgraphContextMenuVisible(true);
+        }
     },
     handleDocumentClick: function(event) {
         const singleMenu = document.getElementById('node-context-menu');
         const multiMenu = document.getElementById('multi-node-context-menu');
+        const subgraphMenu = document.getElementById('subgraph-context-menu');
 
         if (singleMenu && !singleMenu.contains(event.target) &&
-            multiMenu && !multiMenu.contains(event.target)) {
+            multiMenu && !multiMenu.contains(event.target) &&
+            subgraphMenu && !subgraphMenu.contains(event.target)) {
             this.hideContextMenu();
         }
     },
