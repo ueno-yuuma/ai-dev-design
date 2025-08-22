@@ -115,6 +115,9 @@ function ChartViewModel() {
     self.selectionCurrent = { x: 0, y: 0 };
     self.selectionRectangle = null;
     
+    // レンダリング制御フラグ
+    self.suppressAutoRender = false;
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
@@ -1711,7 +1714,9 @@ function ChartViewModel() {
     
     // Mermaidコード変更時の自動レンダリング
     self.currentMermaidCode.subscribe(() => {
-        self.renderMermaid();
+        if (!self.suppressAutoRender) {
+            self.renderMermaid();
+        }
     });
     
     // 複数選択機能のメソッド群
@@ -1839,9 +1844,10 @@ function ChartViewModel() {
         }
         
         if (confirm(`選択された${selectedCount}個のノードを削除しますか？`)) {
-            // 自動レンダリングを一時的に無効化
-            const originalSubscription = self.currentMermaidCode.subscribe;
-            self.currentMermaidCode.subscribe = function() {}; // 空関数で無効化
+            // 複数ノードの場合のみ自動レンダリングを一時的に無効化
+            if (selectedCount > 1) {
+                self.suppressAutoRender = true;
+            }
             
             // 複数ノードを一括削除
             self.selectedNodes().forEach(nodeId => {
@@ -1849,10 +1855,11 @@ function ChartViewModel() {
             });
             
             // 自動レンダリング機能を復元
-            self.currentMermaidCode.subscribe = originalSubscription;
-            
-            // 一度だけ手動でレンダリング
-            self.renderMermaid();
+            if (selectedCount > 1) {
+                self.suppressAutoRender = false;
+                // 一度だけ手動でレンダリング
+                self.renderMermaid();
+            }
             
             self.clearMultiSelection();
             self.addToHistory(`複数ノード削除: ${selectedCount}個`);
