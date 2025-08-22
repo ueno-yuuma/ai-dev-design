@@ -234,140 +234,45 @@ const selectionComponent = {
     wrapNodesInSubgraph: function(mermaidCode, nodeIds, groupName, nodeSubgraphInfo = null) {
         try {
             const lines = mermaidCode.split('\n');
-            const resultLines = [];
-            const processedNodes = new Set();
             
             // サブグラフ情報を取得または新規作成
             if (!nodeSubgraphInfo) {
                 nodeSubgraphInfo = this.detectNodeSubgraphs(nodeIds);
             }
             
+            // ネストレベルと親サブグラフを特定
             const targetNestLevel = nodeSubgraphInfo.maxNestLevel;
             const baseIndent = '    '.repeat(targetNestLevel + 1);
             const nodeIndent = '    '.repeat(targetNestLevel + 2);
             
-            let subgraphLevel = 0;
-            let inTargetSubgraph = false;
-            let insertIndex = -1;
-
-            // コードを行ごとに処理
-            for (let i = 0; i < lines.length; i++) {
-                const line = lines[i].trim();
-
-                if (line.startsWith('flowchart') || line.startsWith('graph')) {
-                    resultLines.push(lines[i]);
-                    continue;
-                }
-
-                if (line.startsWith('subgraph')) {
-                    subgraphLevel++;
-                    if (targetNestLevel === 0) {
-                        // ルートレベルの場合、最初のサブグラフまたはノード定義の前に挿入
-                        if (insertIndex === -1) {
-                            insertIndex = resultLines.length;
-                        }
-                    } else if (subgraphLevel === targetNestLevel + 1) {
-                        // ネストの場合、対象サブグラフ内であることを記録
-                        inTargetSubgraph = true;
-                    }
-                    resultLines.push(lines[i]);
-                    continue;
-                } else if (line === 'end' && subgraphLevel > 0) {
-                    if (targetNestLevel > 0 && subgraphLevel === targetNestLevel + 1 && inTargetSubgraph) {
-                        // ネストの場合、対象サブグラフの終了直前に挿入
-                        if (insertIndex === -1) {
-                            insertIndex = resultLines.length;
-                        }
-                        inTargetSubgraph = false;
-                    }
-                    subgraphLevel--;
-                    resultLines.push(lines[i]);
-                    continue;
-                }
-
-                if (line === '' || line.startsWith('%%')) {
-                    resultLines.push(lines[i]);
-                    continue;
-                }
-
-                // ルートレベルの場合の挿入位置を決定
-                if (insertIndex === -1 && targetNestLevel === 0 && line.includes('[') && line.includes(']')) {
-                    insertIndex = resultLines.length;
-                }
-
-                // 選択されたノードかチェック
-                let isSelectedNodeLine = false;
-                for (const nodeId of nodeIds) {
-                    if (line.includes(`${nodeId}[`) || line.includes(`${nodeId}(`)) {
-                        isSelectedNodeLine = true;
-                        processedNodes.add(nodeId);
-                        break;
-                    }
-                }
-
-                // 選択されたノードは新しいサブグラフに移動するのでスキップ
-                if (isSelectedNodeLine) {
-                    // ただし、ネストの場合は対象サブグラフ内のもののみスキップ
-                    if (targetNestLevel === 0 || (targetNestLevel > 0 && inTargetSubgraph)) {
-                        continue;
-                    }
-                }
-
-                resultLines.push(lines[i]);
+            // 外部接続を検出
+            const externalConnections = this.detectExternalConnections(lines, nodeIds);
+            
+            // 選択されたノードとその関係を抽出
+            const selectedContent = this.extractSelectedNodeContent(lines, nodeIds);
+            
+            // 選択されたノードを除去した元のコードを生成
+            const cleanedLines = this.removeSelectedNodes(lines, nodeIds, targetNestLevel);
+            
+            // 新しいサブグラフを生成
+            const newSubgraph = this.generateSubgraph(groupName, selectedContent, baseIndent, nodeIndent);
+            
+            // サブグラフIDを取得（生成されたサブグラフの最初の行から）
+            const subgraphIdMatch = newSubgraph[0].match(/subgraph\s+(\w+)/);
+            const subgraphId = subgraphIdMatch ? subgraphIdMatch[1] : groupName;
+            
+            // 外部接続をサブグラフレベルの接続に変換
+            const externalConnectionLines = this.generateExternalConnections(externalConnections, subgraphId);
+            
+            // 適切な位置に新しいサブグラフを挿入
+            let result = this.insertSubgraphAtCorrectPosition(cleanedLines, newSubgraph, targetNestLevel);
+            
+            // 外部接続を追加
+            if (externalConnectionLines.length > 0) {
+                result += '\n' + externalConnectionLines.join('\n');
             }
-
-            // 挿入位置が決まらなかった場合はファイル末尾に追加
-            if (insertIndex === -1) {
-                insertIndex = resultLines.length;
-            }
-
-            // サブグラフを生成
-            const subgraphLines = [];
-            subgraphLines.push(`${baseIndent}subgraph ${groupName.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()} ["${groupName}"]`);
-
-            // 選択されたノードのコード行を抽出して追加
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (trimmedLine === '' || trimmedLine.startsWith('%%')) continue;
-
-                for (const nodeId of nodeIds) {
-                    // ノード定義行のみを抽出（矢印を含む行や他のノードを含む行は除外）
-                    const nodeDefPattern = new RegExp(`^\\s*${nodeId}\\[`);
-                    if (nodeDefPattern.test(trimmedLine) && 
-                        !trimmedLine.startsWith('subgraph') && trimmedLine !== 'end') {
-                        subgraphLines.push(`${nodeIndent}${trimmedLine}`);
-                        break;
-                    }
-                }
-            }
-
-            // 選択されたノード間の関係も追加
-            for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (trimmedLine === '' || trimmedLine.startsWith('%%') || 
-                    trimmedLine.startsWith('subgraph') || trimmedLine === 'end') continue;
-
-                // 矢印を含む行で、両端が選択されたノードの場合のみ追加
-                if (trimmedLine.includes('-->')) {
-                    let includesSelectedNodes = 0;
-                    for (const nodeId of nodeIds) {
-                        if (trimmedLine.includes(nodeId)) {
-                            includesSelectedNodes++;
-                        }
-                    }
-                    // 選択されたノード同士の関係のみ追加
-                    if (includesSelectedNodes >= 2) {
-                        subgraphLines.push(`${nodeIndent}${trimmedLine}`);
-                    }
-                }
-            }
-
-            subgraphLines.push(`${baseIndent}end`);
-
-            // 適切な位置にサブグラフを挿入
-            resultLines.splice(insertIndex, 0, ...subgraphLines);
-
-            return resultLines.join('\n');
+            
+            return result;
 
         } catch (error) {
             console.error('グループ化処理エラー:', error);
@@ -375,25 +280,262 @@ const selectionComponent = {
         }
     },
 
+    extractSelectedNodeContent: function(lines, nodeIds) {
+        const nodeDefinitions = [];
+        const connections = [];
+        const processedDefs = new Set();
+        const processedConns = new Set();
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine === '' || trimmedLine.startsWith('%%') || 
+                trimmedLine.startsWith('subgraph') || trimmedLine === 'end') continue;
+            
+            // ノード定義を抽出（より正確なパターンマッチング）
+            for (const nodeId of nodeIds) {
+                const nodeDefRegex = new RegExp(`\\b${nodeId}\\[([^\\]]+)\\]`);
+                const match = trimmedLine.match(nodeDefRegex);
+                if (match && !processedDefs.has(nodeId)) {
+                    const nodeDef = `${nodeId}[${match[1]}]`;
+                    nodeDefinitions.push(nodeDef);
+                    processedDefs.add(nodeId);
+                }
+            }
+            
+            // 選択されたノード間の接続を抽出
+            if (trimmedLine.includes('-->')) {
+                const foundNodes = nodeIds.filter(nodeId => trimmedLine.includes(nodeId));
+                if (foundNodes.length >= 2 && !processedConns.has(trimmedLine)) {
+                    connections.push(trimmedLine);
+                    processedConns.add(trimmedLine);
+                }
+            }
+        }
+        
+        return {
+            nodeDefinitions: nodeDefinitions,
+            connections: connections
+        };
+    },
+
+    detectExternalConnections: function(lines, nodeIds) {
+        const incomingConnections = []; // サブグラフ外 -> 選択ノード
+        const outgoingConnections = []; // 選択ノード -> サブグラフ外
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine === '' || trimmedLine.startsWith('%%') || 
+                trimmedLine.startsWith('subgraph') || trimmedLine === 'end') continue;
+            
+            if (trimmedLine.includes('-->')) {
+                // 接続の両端を解析
+                const arrowMatch = trimmedLine.match(/^([^-]+)-->/);
+                const targetMatch = trimmedLine.match(/-->(.+)$/);
+                
+                if (arrowMatch && targetMatch) {
+                    let sourceNode = arrowMatch[1].trim();
+                    let targetNode = targetMatch[1].trim();
+                    
+                    // ノード定義（[ラベル]）を含む場合は、ノードIDのみを抽出
+                    const sourceIdMatch = sourceNode.match(/^([^\[]+)/);
+                    if (sourceIdMatch) sourceNode = sourceIdMatch[1].trim();
+                    
+                    const targetIdMatch = targetNode.match(/^([^\[]+)/);
+                    if (targetIdMatch) targetNode = targetIdMatch[1].trim();
+                    
+                    // サブグラフ外からの接続を検出
+                    if (!nodeIds.includes(sourceNode) && nodeIds.includes(targetNode)) {
+                        incomingConnections.push({
+                            source: sourceNode,
+                            target: targetNode,
+                            originalLine: trimmedLine
+                        });
+                    }
+                    
+                    // サブグラフ外への接続を検出
+                    if (nodeIds.includes(sourceNode) && !nodeIds.includes(targetNode)) {
+                        outgoingConnections.push({
+                            source: sourceNode,
+                            target: targetNode,
+                            originalLine: trimmedLine
+                        });
+                    }
+                }
+            }
+        }
+        
+        
+        return {
+            incoming: incomingConnections,
+            outgoing: outgoingConnections
+        };
+    },
+
+    generateExternalConnections: function(externalConnections, subgraphId) {
+        const newConnections = [];
+        
+        // サブグラフ内の元のノードへの接続を維持
+        for (const conn of externalConnections.incoming) {
+            const newConnection = `${conn.source} --> ${conn.target}`;
+            newConnections.push(newConnection);
+        }
+        
+        // サブグラフ内の元のノードからの接続を維持
+        for (const conn of externalConnections.outgoing) {
+            const newConnection = `${conn.source} --> ${conn.target}`;
+            newConnections.push(newConnection);
+        }
+        
+        return newConnections;
+    },
+
+    generateSubgraph: function(groupName, selectedContent, baseIndent, nodeIndent) {
+        const subgraphLines = [];
+        const groupId = groupName.replace(/[^a-zA-Z0-9]/g, '') + '_' + Date.now();
+        
+        subgraphLines.push(`${baseIndent}subgraph ${groupId} ["${groupName}"]`);
+        
+        // ノード定義を追加
+        for (const nodeDef of selectedContent.nodeDefinitions) {
+            subgraphLines.push(`${nodeIndent}${nodeDef}`);
+        }
+        
+        // 接続を追加
+        for (const connection of selectedContent.connections) {
+            subgraphLines.push(`${nodeIndent}${connection}`);
+        }
+        
+        subgraphLines.push(`${baseIndent}end`);
+        
+        return subgraphLines;
+    },
+
+    removeSelectedNodes: function(lines, nodeIds, targetNestLevel) {
+        const resultLines = [];
+        let currentLevel = 0;
+        let inTargetSubgraph = (targetNestLevel === 0);
+        
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.startsWith('flowchart') || trimmedLine.startsWith('graph')) {
+                resultLines.push(line);
+                continue;
+            }
+            
+            if (trimmedLine.startsWith('subgraph')) {
+                currentLevel++;
+                // 選択されたノードがあるレベルに入った時にinTargetSubgraphをtrueにする
+                if (targetNestLevel > 0 && currentLevel === targetNestLevel) {
+                    inTargetSubgraph = true;
+                }
+                resultLines.push(line);
+                continue;
+            }
+            
+            if (trimmedLine === 'end') {
+                // 選択されたノードがあるレベルから出る時にinTargetSubgraphをfalseにする
+                if (targetNestLevel > 0 && currentLevel === targetNestLevel) {
+                    inTargetSubgraph = false;
+                }
+                currentLevel--;
+                resultLines.push(line);
+                continue;
+            }
+            
+            if (trimmedLine === '' || trimmedLine.startsWith('%%')) {
+                resultLines.push(line);
+                continue;
+            }
+            
+            // 選択されたノードに関連する行をスキップ
+            let shouldSkip = false;
+            
+            if (inTargetSubgraph || targetNestLevel === 0) {
+                for (const nodeId of nodeIds) {
+                    // ノード定義行をスキップ
+                    if (trimmedLine.includes(`${nodeId}[`)) {
+                        shouldSkip = true;
+                        break;
+                    }
+                    
+                    // 選択されたノードに関連する接続もスキップ（内部・外部問わず）
+                    if (trimmedLine.includes('-->') && trimmedLine.includes(nodeId)) {
+                        shouldSkip = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!shouldSkip) {
+                resultLines.push(line);
+            }
+        }
+        
+        return resultLines;
+    },
+
+    insertSubgraphAtCorrectPosition: function(cleanedLines, newSubgraph, targetNestLevel) {
+        let insertIndex = -1;
+        let currentLevel = 0;
+        
+        
+        for (let i = 0; i < cleanedLines.length; i++) {
+            const trimmedLine = cleanedLines[i].trim();
+            
+            if (trimmedLine.startsWith('subgraph')) {
+                currentLevel++;
+            } else if (trimmedLine === 'end') {
+                // targetNestLevelのサブグラフの終了直前に挿入（ネスト内に挿入）
+                if (currentLevel === targetNestLevel) {
+                    insertIndex = i;
+                    break;
+                }
+                currentLevel--;
+            } else if (targetNestLevel === 0 && insertIndex === -1 && 
+                      (trimmedLine.includes('[') || trimmedLine.startsWith('subgraph'))) {
+                // ルートレベルの場合、最初のノードまたはサブグラフの前に挿入
+                insertIndex = i;
+                break;
+            }
+        }
+        
+        // 挿入位置が見つからない場合は末尾に追加
+        if (insertIndex === -1) {
+            insertIndex = cleanedLines.length;
+        }
+        
+        // 新しいサブグラフを挿入
+        const result = [...cleanedLines];
+        result.splice(insertIndex, 0, ...newSubgraph);
+        
+        return result.join('\n');
+    },
+
     detectNodeSubgraphs: function(nodeIds) {
         const mermaidCode = this.currentMermaidCode();
         const lines = mermaidCode.split('\n');
+        
         
         const nodeSubgraphs = {};
         const subgraphStack = [];
         let maxNestLevel = 0;
 
-        for (const line of lines) {
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
             const trimmedLine = line.trim();
             
             if (trimmedLine.startsWith('subgraph')) {
                 const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
                 if (match) {
-                    subgraphStack.push({
+                    const subgraph = {
                         id: match[1],
                         name: match[2] || match[1],
                         level: subgraphStack.length
-                    });
+                    };
+                    subgraphStack.push(subgraph);
                 }
             } else if (trimmedLine === 'end' && subgraphStack.length > 0) {
                 subgraphStack.pop();
