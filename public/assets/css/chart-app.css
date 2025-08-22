@@ -643,6 +643,39 @@ body {
     opacity: 0.8;
 }
 
+/* ドラッグ選択機能 */
+.selection-rectangle {
+    position: absolute;
+    border: 2px dashed #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+}
+
+.selection-rectangle.active {
+    display: block;
+}
+
+/* 選択されたノードのスタイル */
+.mermaid-container .node.multi-selected {
+    filter: drop-shadow(0 0 6px rgba(255, 193, 7, 0.8));
+}
+
+.mermaid-container .node.multi-selected rect,
+.mermaid-container .node.multi-selected circle,
+.mermaid-container .node.multi-selected polygon,
+.mermaid-container .node.multi-selected path {
+    stroke: #ffc107 !important;
+    stroke-width: 3px !important;
+}
+
+/* 選択中のカーソル */
+.chart-canvas.selecting {
+    cursor: crosshair;
+}
+
+
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
     .left-sidebar {

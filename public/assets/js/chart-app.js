@@ -105,6 +105,16 @@ function ChartViewModel() {
     self.dragStartTime = 0;
     self.dragThreshold = 5; // ピクセル
     
+    // 複数選択関連
+    self.isSelecting = ko.observable(false);
+    self.selectedNodes = ko.observableArray([]);
+    self.selectedNodesCount = ko.computed(function() {
+        return self.selectedNodes().length;
+    });
+    self.selectionStart = { x: 0, y: 0 };
+    self.selectionCurrent = { x: 0, y: 0 };
+    self.selectionRectangle = null;
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
@@ -128,6 +138,7 @@ function ChartViewModel() {
         self.setupDragAndDrop();
         self.setupNavTabs();
         self.setupKeyboardShortcuts();
+        self.setupMultiSelection();
         self.renderMermaid();
         
         // 初期状態を履歴に追加
@@ -433,6 +444,7 @@ function ChartViewModel() {
                     setTimeout(() => {
                         self.setupZoomAndPan();
                         self.setupNodeClickHandlers();
+                        self.updateNodeSelection(); // 複数選択状態を復元
                     }, 100);
                 })
                 .catch(error => {
@@ -483,20 +495,43 @@ function ChartViewModel() {
         self.updateMermaidTransform();
     };
     
-    // マウスダウン（パン開始）
+    // マウスダウン（パン開始または選択開始）
     self.handleMouseDown = function(e) {
-        // インライン編集中やノードドラッグ中はパンを無効にする
+        // インライン編集中やノードドラッグ中は何もしない
         if (self.isInlineEditing() || self.isNodeDragging()) {
             return;
         }
         
-        // ノード上でのクリックの場合はパンしない
+        // ノード上でのクリックの場合はパンも選択もしない
         const target = e.target;
         if (target.closest && target.closest('g.node')) {
             return;
         }
         
-        if (e.button === 2) { // Right mouse button
+        if (e.button === 0) { // Left mouse button - 選択開始
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            const rect = mermaidDisplay.getBoundingClientRect();
+            
+            self.selectionStart = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            // Ctrlキーが押されていない場合は既存の選択をクリア
+            if (!e.ctrlKey && !e.metaKey) {
+                self.clearMultiSelection();
+            }
+            
+            self.isSelecting(true);
+            
+            // 選択中のスタイルを適用
+            const chartCanvas = document.getElementById('chart-canvas');
+            if (chartCanvas) {
+                chartCanvas.classList.add('selecting');
+            }
+            
+            e.preventDefault();
+        } else if (e.button === 2) { // Right mouse button - パン開始
             self.isDragging(true);
             self.lastMousePos = { x: e.clientX, y: e.clientY };
             
@@ -510,9 +545,10 @@ function ChartViewModel() {
         }
     };
     
-    // マウス移動（パン）
+    // マウス移動（パンまたは選択）
     self.handleMouseMove = function(e) {
         if (self.isDragging()) {
+            // パン処理
             const deltaX = e.clientX - self.lastMousePos.x;
             const deltaY = e.clientY - self.lastMousePos.y;
             
@@ -522,10 +558,22 @@ function ChartViewModel() {
             self.lastMousePos = { x: e.clientX, y: e.clientY };
             self.updateMermaidTransform();
             e.preventDefault();
+        } else if (self.isSelecting()) {
+            // 選択矩形の更新
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            const rect = mermaidDisplay.getBoundingClientRect();
+            
+            self.selectionCurrent = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            self.updateSelectionRectangle();
+            e.preventDefault();
         }
     };
     
-    // マウスアップ（パン終了）
+    // マウスアップ（パンまたは選択終了）
     self.handleMouseUp = function(e) {
         if (e.button === 2 || self.isDragging()) { // Right mouse button or currently dragging
             self.isDragging(false);
@@ -535,10 +583,13 @@ function ChartViewModel() {
             if (mermaidDisplay) {
                 mermaidDisplay.classList.remove('panning');
             }
+        } else if (e.button === 0 && self.isSelecting()) { // Left mouse button - 選択終了
+            self.finishSelection();
+            e.preventDefault();
         }
     };
     
-    // マウスリーブ（パン終了）
+    // マウスリーブ（パンまたは選択終了）
     self.handleMouseLeave = function(e) {
         if (self.isDragging()) {
             self.isDragging(false);
@@ -548,6 +599,10 @@ function ChartViewModel() {
             if (mermaidDisplay) {
                 mermaidDisplay.classList.remove('panning');
             }
+        }
+        
+        if (self.isSelecting()) {
+            self.finishSelection();
         }
     };
     
@@ -967,6 +1022,24 @@ function ChartViewModel() {
                     case 's':
                         e.preventDefault();
                         self.saveChart();
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        self.selectAllNodes();
+                        break;
+                }
+            } else {
+                switch (e.key) {
+                    case 'Delete':
+                    case 'Backspace':
+                        e.preventDefault();
+                        if (self.selectedNodes().length > 0) {
+                            self.deleteSelectedNodes();
+                        }
+                        break;
+                    case 'Escape':
+                        e.preventDefault();
+                        self.clearMultiSelection();
                         break;
                 }
             }
@@ -1640,6 +1713,160 @@ function ChartViewModel() {
     self.currentMermaidCode.subscribe(() => {
         self.renderMermaid();
     });
+    
+    // 複数選択機能のメソッド群
+    
+    // 複数選択機能のセットアップ
+    self.setupMultiSelection = function() {
+        // 複数選択機能の初期化（特別な処理は不要）
+    };
+    
+    // 選択矩形の更新
+    self.updateSelectionRectangle = function() {
+        const selectionRect = document.getElementById('selection-rectangle');
+        if (!selectionRect || !self.isSelecting()) return;
+        
+        const startX = Math.min(self.selectionStart.x, self.selectionCurrent.x);
+        const startY = Math.min(self.selectionStart.y, self.selectionCurrent.y);
+        const width = Math.abs(self.selectionCurrent.x - self.selectionStart.x);
+        const height = Math.abs(self.selectionCurrent.y - self.selectionStart.y);
+        
+        selectionRect.style.left = startX + 'px';
+        selectionRect.style.top = startY + 'px';
+        selectionRect.style.width = width + 'px';
+        selectionRect.style.height = height + 'px';
+        selectionRect.classList.add('active');
+    };
+    
+    // 選択完了処理
+    self.finishSelection = function() {
+        if (!self.isSelecting()) return;
+        
+        // 選択範囲内のノードを検出
+        const selectedNodeIds = self.getNodesInSelectionArea();
+        
+        // 選択されたノードを追加
+        selectedNodeIds.forEach(nodeId => {
+            if (self.selectedNodes().indexOf(nodeId) === -1) {
+                self.selectedNodes.push(nodeId);
+            }
+        });
+        
+        // 選択状態をクリア
+        self.isSelecting(false);
+        
+        // UI要素をクリア
+        const selectionRect = document.getElementById('selection-rectangle');
+        if (selectionRect) {
+            selectionRect.classList.remove('active');
+        }
+        
+        const chartCanvas = document.getElementById('chart-canvas');
+        if (chartCanvas) {
+            chartCanvas.classList.remove('selecting');
+        }
+        
+        // 選択されたノードを視覚的にハイライト
+        self.updateNodeSelection();
+    };
+    
+    // 選択範囲内のノードを取得
+    self.getNodesInSelectionArea = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return [];
+        
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        const selectedNodeIds = [];
+        
+        const selectionMinX = Math.min(self.selectionStart.x, self.selectionCurrent.x);
+        const selectionMinY = Math.min(self.selectionStart.y, self.selectionCurrent.y);
+        const selectionMaxX = Math.max(self.selectionStart.x, self.selectionCurrent.x);
+        const selectionMaxY = Math.max(self.selectionStart.y, self.selectionCurrent.y);
+        
+        nodes.forEach(node => {
+            const rect = node.getBoundingClientRect();
+            const mermaidDisplayRect = document.getElementById('mermaid-display').getBoundingClientRect();
+            
+            // ノードの位置をmermaid-display相対座標に変換
+            const nodeX = rect.left - mermaidDisplayRect.left + rect.width / 2;
+            const nodeY = rect.top - mermaidDisplayRect.top + rect.height / 2;
+            
+            // 選択範囲内にあるかチェック
+            if (nodeX >= selectionMinX && nodeX <= selectionMaxX &&
+                nodeY >= selectionMinY && nodeY <= selectionMaxY) {
+                const nodeId = self.extractNodeId(node);
+                if (nodeId) {
+                    selectedNodeIds.push(nodeId);
+                }
+            }
+        });
+        
+        return selectedNodeIds;
+    };
+    
+    // 複数選択をクリア
+    self.clearMultiSelection = function() {
+        self.selectedNodes([]);
+        self.updateNodeSelection();
+    };
+    
+    // ノード選択の視覚的更新
+    self.updateNodeSelection = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return;
+        
+        // 全てのノードから選択状態を削除
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        nodes.forEach(node => {
+            node.classList.remove('multi-selected');
+        });
+        
+        // 選択されたノードにスタイルを適用
+        self.selectedNodes().forEach(nodeId => {
+            const nodeElement = mermaidContainer.querySelector(`g.node[id*="${nodeId}"]`);
+            if (nodeElement) {
+                nodeElement.classList.add('multi-selected');
+            }
+        });
+    };
+    
+    // 選択されたノードを削除
+    self.deleteSelectedNodes = function() {
+        const selectedCount = self.selectedNodes().length;
+        if (selectedCount === 0) {
+            self.showError('削除するノードが選択されていません');
+            return;
+        }
+        
+        if (confirm(`選択された${selectedCount}個のノードを削除しますか？`)) {
+            self.selectedNodes().forEach(nodeId => {
+                self.removeNodeFromMermaidCode(nodeId);
+            });
+            
+            self.clearMultiSelection();
+            self.addToHistory(`複数ノード削除: ${selectedCount}個`);
+            self.showSuccess(`${selectedCount}個のノードを削除しました`);
+        }
+    };
+    
+    // 全ノード選択
+    self.selectAllNodes = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return;
+        
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        const allNodeIds = [];
+        
+        nodes.forEach(node => {
+            const nodeId = self.extractNodeId(node);
+            if (nodeId) {
+                allNodeIds.push(nodeId);
+            }
+        });
+        
+        self.selectedNodes(allNodeIds);
+        self.updateNodeSelection();
+    };
 }
 
 // アプリケーション開始

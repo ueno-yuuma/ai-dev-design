@@ -158,6 +158,9 @@
                         <div class="error-message" id="error-message" data-bind="visible: errorMessage, text: errorMessage"></div>
                         <div class="success-message" id="success-message" data-bind="visible: successMessage, text: successMessage"></div>
                         
+                        <!-- 選択矩形 -->
+                        <div class="selection-rectangle" id="selection-rectangle"></div>
+                        
                         <div id="mermaid-display" data-bind="html: mermaidHtml"></div>
                     </div>
                 </div>
