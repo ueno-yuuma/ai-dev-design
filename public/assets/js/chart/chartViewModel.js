@@ -64,6 +64,7 @@ function ChartViewModel() {
     self.selectionCurrent = null;
     self.selectionRectangle = null;
 
+
     // レンダリング制御フラグ
     self.suppressAutoRender = false;
 

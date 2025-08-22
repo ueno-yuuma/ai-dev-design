@@ -179,13 +179,39 @@ const selectionComponent = {
             return;
         }
 
-        const groupName = prompt('グループ名を入力してください:', `グループ${Date.now()}`);
+        // スマートグループ化: 条件に応じて通常グループ化かネストグループ化を自動選択
+        let nodeSubgraphInfo;
+        let canNest = false;
+        let groupType = '通常';
+        
+        try {
+            nodeSubgraphInfo = this.detectNodeSubgraphs(this.selectedNodes());
+            canNest = nodeSubgraphInfo && nodeSubgraphInfo.canNest && 
+                     nodeSubgraphInfo.allNodesInSameSubgraph && 
+                     nodeSubgraphInfo.maxNestLevel > 0;
+            
+            if (canNest) {
+                groupType = 'ネスト';
+            }
+        } catch (error) {
+            console.error('サブグラフ情報取得エラー:', error);
+            // エラーの場合は通常グループ化にフォールバック
+        }
+
+        const defaultName = canNest ? `ネストグループ${Date.now()}` : `グループ${Date.now()}`;
+        const promptMessage = canNest ? 
+            'ネストグループ名を入力してください（既存グループ内に作成されます）:' : 
+            'グループ名を入力してください:';
+            
+        const groupName = prompt(promptMessage, defaultName);
         if (!groupName) {
             return;
         }
 
         let mermaidCode = this.currentMermaidCode();
-        const groupedCode = this.wrapNodesInSubgraph(mermaidCode, this.selectedNodes(), groupName);
+        
+        // 統合されたグループ化処理（通常もネストも同一アルゴリズム）
+        const groupedCode = this.wrapNodesInSubgraph(mermaidCode, this.selectedNodes(), groupName, nodeSubgraphInfo);
 
         if (groupedCode !== mermaidCode) {
             this.suppressAutoRender = true;
@@ -195,23 +221,36 @@ const selectionComponent = {
 
             this.clearMultiSelection();
 
-            this.showSuccess(`${selectedCount}個のノードを「${groupName}」グループにまとめました`);
-            this.addToHistory(`ノードグループ化: ${groupName}`);
+            this.showSuccess(`${selectedCount}個のノードを「${groupName}」${groupType}グループにまとめました`);
+            this.addToHistory(`${groupType}グループ化: ${groupName}`);
         } else {
             this.showError('グループ化に失敗しました');
         }
 
         this.hideContextMenu();
     },
-    wrapNodesInSubgraph: function(mermaidCode, nodeIds, groupName) {
+
+
+    wrapNodesInSubgraph: function(mermaidCode, nodeIds, groupName, nodeSubgraphInfo = null) {
         try {
             const lines = mermaidCode.split('\n');
             const resultLines = [];
             const processedNodes = new Set();
-            let inSubgraph = false;
+            
+            // サブグラフ情報を取得または新規作成
+            if (!nodeSubgraphInfo) {
+                nodeSubgraphInfo = this.detectNodeSubgraphs(nodeIds);
+            }
+            
+            const targetNestLevel = nodeSubgraphInfo.maxNestLevel;
+            const baseIndent = '    '.repeat(targetNestLevel + 1);
+            const nodeIndent = '    '.repeat(targetNestLevel + 2);
+            
             let subgraphLevel = 0;
-
+            let inTargetSubgraph = false;
             let insertIndex = -1;
+
+            // コードを行ごとに処理
             for (let i = 0; i < lines.length; i++) {
                 const line = lines[i].trim();
 
@@ -221,15 +260,27 @@ const selectionComponent = {
                 }
 
                 if (line.startsWith('subgraph')) {
-                    inSubgraph = true;
                     subgraphLevel++;
+                    if (targetNestLevel === 0) {
+                        // ルートレベルの場合、最初のサブグラフまたはノード定義の前に挿入
+                        if (insertIndex === -1) {
+                            insertIndex = resultLines.length;
+                        }
+                    } else if (subgraphLevel === targetNestLevel + 1) {
+                        // ネストの場合、対象サブグラフ内であることを記録
+                        inTargetSubgraph = true;
+                    }
                     resultLines.push(lines[i]);
                     continue;
-                } else if (line === 'end' && inSubgraph) {
-                    subgraphLevel--;
-                    if (subgraphLevel === 0) {
-                        inSubgraph = false;
+                } else if (line === 'end' && subgraphLevel > 0) {
+                    if (targetNestLevel > 0 && subgraphLevel === targetNestLevel + 1 && inTargetSubgraph) {
+                        // ネストの場合、対象サブグラフの終了直前に挿入
+                        if (insertIndex === -1) {
+                            insertIndex = resultLines.length;
+                        }
+                        inTargetSubgraph = false;
                     }
+                    subgraphLevel--;
                     resultLines.push(lines[i]);
                     continue;
                 }
@@ -239,10 +290,12 @@ const selectionComponent = {
                     continue;
                 }
 
-                if (insertIndex === -1 && !inSubgraph && line.includes('[') && line.includes(']')) {
+                // ルートレベルの場合の挿入位置を決定
+                if (insertIndex === -1 && targetNestLevel === 0 && line.includes('[') && line.includes(']')) {
                     insertIndex = resultLines.length;
                 }
 
+                // 選択されたノードかチェック
                 let isSelectedNodeLine = false;
                 for (const nodeId of nodeIds) {
                     if (line.includes(`${nodeId}[`) || line.includes(`${nodeId}(`)) {
@@ -252,20 +305,27 @@ const selectionComponent = {
                     }
                 }
 
-                if (isSelectedNodeLine && !inSubgraph) {
-                    continue;
+                // 選択されたノードは新しいサブグラフに移動するのでスキップ
+                if (isSelectedNodeLine) {
+                    // ただし、ネストの場合は対象サブグラフ内のもののみスキップ
+                    if (targetNestLevel === 0 || (targetNestLevel > 0 && inTargetSubgraph)) {
+                        continue;
+                    }
                 }
 
                 resultLines.push(lines[i]);
             }
 
+            // 挿入位置が決まらなかった場合はファイル末尾に追加
             if (insertIndex === -1) {
                 insertIndex = resultLines.length;
             }
 
+            // サブグラフを生成
             const subgraphLines = [];
-            subgraphLines.push(`    subgraph ${groupName.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()} ["${groupName}"]`);
+            subgraphLines.push(`${baseIndent}subgraph ${groupName.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()} ["${groupName}"]`);
 
+            // 選択されたノードのコード行を抽出して追加
             for (const line of lines) {
                 const trimmedLine = line.trim();
                 if (trimmedLine === '' || trimmedLine.startsWith('%%')) continue;
@@ -273,14 +333,15 @@ const selectionComponent = {
                 for (const nodeId of nodeIds) {
                     if ((trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) &&
                         !trimmedLine.startsWith('subgraph') && trimmedLine !== 'end') {
-                        subgraphLines.push(`        ${trimmedLine}`);
+                        subgraphLines.push(`${nodeIndent}${trimmedLine}`);
                         break;
                     }
                 }
             }
 
-            subgraphLines.push('    end');
+            subgraphLines.push(`${baseIndent}end`);
 
+            // 適切な位置にサブグラフを挿入
             resultLines.splice(insertIndex, 0, ...subgraphLines);
 
             return resultLines.join('\n');
@@ -289,6 +350,70 @@ const selectionComponent = {
             console.error('グループ化処理エラー:', error);
             return mermaidCode;
         }
+    },
+
+    detectNodeSubgraphs: function(nodeIds) {
+        const mermaidCode = this.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+        
+        const nodeSubgraphs = {};
+        const subgraphStack = [];
+        let maxNestLevel = 0;
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.startsWith('subgraph')) {
+                const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
+                if (match) {
+                    subgraphStack.push({
+                        id: match[1],
+                        name: match[2] || match[1],
+                        level: subgraphStack.length
+                    });
+                }
+            } else if (trimmedLine === 'end' && subgraphStack.length > 0) {
+                subgraphStack.pop();
+            } else {
+                // ノードの定義行かチェック
+                for (const nodeId of nodeIds) {
+                    if (trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) {
+                        nodeSubgraphs[nodeId] = {
+                            nestLevel: subgraphStack.length,
+                            parentSubgraphs: [...subgraphStack],
+                            insertPosition: subgraphStack.length > 0 ? 'nested' : 'root'
+                        };
+                        maxNestLevel = Math.max(maxNestLevel, subgraphStack.length);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 同じサブグラフ内のノードかチェック
+        const subgraphGroups = {};
+        let canNestTogether = true;
+        
+        for (const nodeId in nodeSubgraphs) {
+            const subgraphPath = nodeSubgraphs[nodeId].parentSubgraphs.map(sg => sg.id).join('.');
+            if (!subgraphGroups[subgraphPath]) {
+                subgraphGroups[subgraphPath] = [];
+            }
+            subgraphGroups[subgraphPath].push(nodeId);
+        }
+        
+        // 選択されたノードが複数の異なるサブグラフにまたがっている場合はネスト不可
+        if (Object.keys(subgraphGroups).length > 1) {
+            canNestTogether = false;
+        }
+
+        return {
+            nodeSubgraphs,
+            maxNestLevel,
+            canNest: maxNestLevel >= 0 && canNestTogether,
+            subgraphGroups,
+            allNodesInSameSubgraph: Object.keys(subgraphGroups).length <= 1
+        };
     },
     getNodeSubgraph: function(nodeId) {
         const mermaidCode = this.currentMermaidCode();
