@@ -1,4 +1,30 @@
 const groupingComponent = {
+    _performGrouping: function(groupName, nodeSubgraphInfo, groupType) {
+        if (!groupName) {
+            this.hideContextMenu();
+            return;
+        }
+
+        const selectedCount = this.selectedNodes().length;
+        let mermaidCode = this.currentMermaidCode();
+        
+        const groupedCode = this.wrapNodesInSubgraph(mermaidCode, this.selectedNodes(), groupName, nodeSubgraphInfo);
+
+        if (groupedCode !== mermaidCode) {
+            this.suppressAutoRender = true;
+            this.currentMermaidCode(groupedCode);
+            this.suppressAutoRender = false;
+            this.renderMermaid();
+            this.clearMultiSelection();
+            this.showSuccess(`${selectedCount}個のノードを「${groupName}」${groupType}グループにまとめました`);
+            this.addToHistory(`${groupType}グループ化: ${groupName}`);
+        } else {
+            this.showError('グループ化に失敗しました');
+        }
+
+        this.hideContextMenu();
+    },
+
     groupSelectedNodes: function() {
         const selectedCount = this.selectedNodes().length;
         if (selectedCount < 2) {
@@ -6,7 +32,6 @@ const groupingComponent = {
             return;
         }
 
-        // スマートグループ化: 条件に応じて通常グループ化かネストグループ化を自動選択
         let nodeSubgraphInfo;
         let canNest = false;
         let groupType = '通常';
@@ -22,39 +47,53 @@ const groupingComponent = {
             }
         } catch (error) {
             console.error('サブグラフ情報取得エラー:', error);
-            // エラーの場合は通常グループ化にフォールバック
         }
 
-        const defaultName = canNest ? `ネストグループ${Date.now()}` : `グループ${Date.now()}`;
-        const promptMessage = canNest ? 
-            'ネストグループ名を入力してください（既存グループ内に作成されます）:' : 
-            'グループ名を入力してください:';
+        // 設定に応じて処理を分岐
+        if (this.settings.autoGenerateGroupName()) {
+            // --- 自動生成ロジック ---
+            this.isLoading(true);
             
-        const groupName = prompt(promptMessage, defaultName);
-        if (!groupName) {
-            return;
-        }
+            // 選択ノードのラベルを抽出
+            const content = this.extractSelectedNodeContent(this.currentMermaidCode().split('\n'), this.selectedNodes());
+            const nodeLabels = content.nodeDefinitions.map(def => {
+                const match = def.match(/[\[(]([^)]+)[\])]/); // A["label"] or A("label")
+                if (match) return match[1];
+                const match2 = def.match(/[\[]([^"\n]+)[\]]/);
+                if (match2) return match2[1];
+                const match3 = def.match(/[\[]([^[]+)[\]]/);
+                return match3 ? match3[1] : '';
+            }).filter(label => label);
 
-        let mermaidCode = this.currentMermaidCode();
-        
-        // 統合されたグループ化処理（通常もネストも同一アルゴリズム）
-        const groupedCode = this.wrapNodesInSubgraph(mermaidCode, this.selectedNodes(), groupName, nodeSubgraphInfo);
+            if (nodeLabels.length === 0) {
+                this.showError('グループ化するノードのテキストが取得できませんでした。');
+                this.isLoading(false);
+                return;
+            }
 
-        if (groupedCode !== mermaidCode) {
-            this.suppressAutoRender = true;
-            this.currentMermaidCode(groupedCode);
-            this.suppressAutoRender = false;
-            this.renderMermaid();
+            // APIを呼び出し
+            apiComponent.generateGroupName(nodeLabels)
+                .then(groupName => {
+                    this._performGrouping(groupName, nodeSubgraphInfo, groupType);
+                })
+                .catch(error => {
+                    console.error('Error generating group name:', error);
+                    this.showError(`グループ名の自動生成に失敗しました: ${error.message}`);
+                })
+                .finally(() => {
+                    this.isLoading(false);
+                });
 
-            this.clearMultiSelection();
-
-            this.showSuccess(`${selectedCount}個のノードを「${groupName}」${groupType}グループにまとめました`);
-            this.addToHistory(`${groupType}グループ化: ${groupName}`);
         } else {
-            this.showError('グループ化に失敗しました');
+            // --- 手動入力ロジック ---
+            const defaultName = canNest ? `ネストグループ${Date.now()}` : `グループ${Date.now()}`;
+            const promptMessage = canNest ? 
+                'ネストグループ名を入力してください（既存グループ内に作成されます）:' : 
+                'グループ名を入力してください:';
+                
+            const groupName = prompt(promptMessage, defaultName);
+            this._performGrouping(groupName, nodeSubgraphInfo, groupType);
         }
-
-        this.hideContextMenu();
     },
 
     wrapNodesInSubgraph: function(mermaidCode, nodeIds, groupName, nodeSubgraphInfo = null) {
@@ -119,18 +158,20 @@ const groupingComponent = {
             
             // ノード定義を抽出（より正確なパターンマッチング）
             for (const nodeId of nodeIds) {
-                const nodeDefRegex = new RegExp(`\\b${nodeId}\\[([^\\]]+)\\]`);
+                const nodeDefRegex = new RegExp(`\\b${nodeId}([\[][^\]]+[\]]|\([^)]+\))`);
                 const match = trimmedLine.match(nodeDefRegex);
                 if (match && !processedDefs.has(nodeId)) {
-                    const nodeDef = `${nodeId}[${match[1]}]`;
-                    nodeDefinitions.push(nodeDef);
+                    nodeDefinitions.push(trimmedLine);
                     processedDefs.add(nodeId);
                 }
             }
             
             // 選択されたノード間の接続を抽出
             if (trimmedLine.includes('-->')) {
-                const foundNodes = nodeIds.filter(nodeId => trimmedLine.includes(nodeId));
+                const foundNodes = nodeIds.filter(nodeId => {
+                    const nodeRefRegex = new RegExp(`\\b${nodeId}([\[]|\()`);
+                    return nodeRefRegex.test(trimmedLine);
+                });
                 if (foundNodes.length >= 2 && !processedConns.has(trimmedLine)) {
                     connections.push(trimmedLine);
                     processedConns.add(trimmedLine);
@@ -139,8 +180,8 @@ const groupingComponent = {
         }
         
         return {
-            nodeDefinitions: nodeDefinitions,
-            connections: connections
+            nodeDefinitions: [...new Set(nodeDefinitions)],
+            connections: [...new Set(connections)]
         };
     },
 
@@ -163,10 +204,10 @@ const groupingComponent = {
                     let targetNode = targetMatch[1].trim();
                     
                     // ノード定義（[ラベル]）を含む場合は、ノードIDのみを抽出
-                    const sourceIdMatch = sourceNode.match(/^([^\[]+)/);
+                    const sourceIdMatch = sourceNode.match(/^([^\[(]+)/);
                     if (sourceIdMatch) sourceNode = sourceIdMatch[1].trim();
                     
-                    const targetIdMatch = targetNode.match(/^([^\[]+)/);
+                    const targetIdMatch = targetNode.match(/^([^\[(]+)/);
                     if (targetIdMatch) targetNode = targetIdMatch[1].trim();
                     
                     // サブグラフ外からの接続を検出
@@ -279,20 +320,13 @@ const groupingComponent = {
             // 選択されたノードに関連する行をスキップ
             let shouldSkip = false;
             
-            if (inTargetSubgraph || targetNestLevel === 0) {
-                for (const nodeId of nodeIds) {
-                    // ノード定義行をスキップ
-                    if (trimmedLine.includes(`${nodeId}[`)) {
-                        shouldSkip = true;
-                        break;
-                    }
-                    
-                    // 選択されたノードに関連する接続もスキップ（内部・外部問わず）
-                    if (trimmedLine.includes('-->') && trimmedLine.includes(nodeId)) {
-                        shouldSkip = true;
-                        break;
-                    }
-                }
+            const isRelevantLine = nodeIds.some(nodeId => {
+                const nodeRefRegex = new RegExp(`\\b${nodeId}([\[]|\(|-->|$)`);
+                return nodeRefRegex.test(trimmedLine);
+            });
+
+            if (isRelevantLine) {
+                 shouldSkip = true;
             }
             
             if (!shouldSkip) {
@@ -315,13 +349,13 @@ const groupingComponent = {
                 currentLevel++;
             } else if (trimmedLine === 'end') {
                 // targetNestLevelのサブグラフの終了直前に挿入（ネスト内に挿入）
-                if (currentLevel === targetNestLevel) {
+                if (currentLevel === targetNestLevel && targetNestLevel > 0) {
                     insertIndex = i;
                     break;
                 }
                 currentLevel--;
             } else if (targetNestLevel === 0 && insertIndex === -1 && 
-                      (trimmedLine.includes('[') || trimmedLine.startsWith('subgraph'))) {
+                      (trimmedLine.includes('[') || trimmedLine.includes('(') || trimmedLine.startsWith('subgraph'))) {
                 // ルートレベルの場合、最初のノードまたはサブグラフの前に挿入
                 insertIndex = i;
                 break;
@@ -330,7 +364,13 @@ const groupingComponent = {
         
         // 挿入位置が見つからない場合は末尾に追加
         if (insertIndex === -1) {
-            insertIndex = cleanedLines.length;
+            // 最後の 'end' がある場合はその前に挿入
+            const lastEnd = cleanedLines.map(l => l.trim()).lastIndexOf('end');
+            if (lastEnd !== -1) {
+                insertIndex = lastEnd;
+            } else {
+                insertIndex = cleanedLines.length;
+            }
         }
         
         // 新しいサブグラフを挿入
@@ -354,7 +394,7 @@ const groupingComponent = {
             const trimmedLine = line.trim();
             
             if (trimmedLine.startsWith('subgraph')) {
-                const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
+                const match = trimmedLine.match(/subgraph\s+(\w+)\s*[\[]?"?([^"]*)"?[\]]?/);
                 if (match) {
                     const subgraph = {
                         id: match[1],
@@ -420,7 +460,7 @@ const groupingComponent = {
             if (trimmedLine.startsWith('subgraph')) {
                 subgraphLevel++;
                 if (subgraphLevel === 1) {
-                    const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
+                    const match = trimmedLine.match(/subgraph\s+(\w+)\s*[\[]?"?([^"]*)"?[\]]?/);
                     if (match) {
                         currentSubgraph = {
                             id: match[1],
@@ -553,9 +593,9 @@ const groupingComponent = {
             
             if (trimmedLine.includes(`subgraph ${subgraphInfo.id}`)) {
                 // サブグラフの名前部分を更新
-                const match = trimmedLine.match(/^(\s*subgraph\s+\w+\s*\[?")[^"]*("?\]?)$/);
+                const match = trimmedLine.match(/^(\s*subgraph\s+\w+\s*[\[]?")[^"]*("[\]]?)$/);
                 if (match) {
-                    lines[i] = line.replace(/^(\s*subgraph\s+\w+\s*\[?")[^"]*("?\]?)$/, `$1${newName}$2`);
+                    lines[i] = line.replace(/^(\s*subgraph\s+\w+\s*[\[]?")[^"]*("[\]]?)$/, `$1${newName}$2`);
                     break;
                 }
             }

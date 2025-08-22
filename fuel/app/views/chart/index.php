@@ -349,6 +349,30 @@
         </div>
     </div>
 
+    <!-- 設定モーダル -->
+    <div class="modal fade" id="settings-modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">設定</h5>
+                    <button type="button" class="close" data-dismiss="modal">
+                        <span>&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="auto-group-name-switch" data-bind="checked: settings.autoGenerateGroupName">
+                        <label class="form-check-label" for="auto-group-name-switch">グループ名を自動で生成する</label>
+                    </div>
+                    <small class="form-text text-muted">ONの場合、選択したノードの内容を元にGemini APIがグループ名を提案します。</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-dismiss="modal">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- jQuery (Bootstrap依存) -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     

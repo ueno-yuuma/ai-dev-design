@@ -2,6 +2,46 @@
 function ChartViewModel() {
     const self = this;
 
+    // --- 設定 ---
+    self.settings = {
+        autoGenerateGroupName: ko.observable(false) // デフォルトはOFF
+    };
+
+    // 設定の読み込み処理
+    self.loadSettings = function() {
+        const savedSettings = localStorage.getItem('chartAppSettings');
+        if (savedSettings) {
+            try {
+                const parsed = JSON.parse(savedSettings);
+                if (parsed && typeof parsed.autoGenerateGroupName !== 'undefined') {
+                    self.settings.autoGenerateGroupName(parsed.autoGenerateGroupName);
+                }
+            } catch (e) {
+                console.error('Failed to parse settings from localStorage', e);
+            }
+        }
+    };
+
+    // 設定の保存処理
+    self.saveSettings = function() {
+        localStorage.setItem('chartAppSettings', ko.toJSON(self.settings));
+    };
+
+    // 設定値が変更されたら自動で保存
+    self.settings.autoGenerateGroupName.subscribe(function() {
+        self.saveSettings();
+    });
+
+    // --- モーダル表示 ---
+    self.showSettings = function() {
+        $('#settings-modal').modal('show');
+    };
+
+    // 操作方法モーダル表示
+    self.showOperationGuide = function() {
+        $('#operation-guide-modal').modal('show');
+    };
+
     // 認証関連
     self.isAuthenticated = ko.observable(false);
     self.userName = ko.observable('');
@@ -105,6 +145,9 @@ function ChartViewModel() {
 
         // 初期状態を履歴に追加
         self.addToHistory('初期状態');
+
+        // 設定を読み込む
+        self.loadSettings();
     };
 
     // メッセージ表示
