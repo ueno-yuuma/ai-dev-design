@@ -105,6 +105,19 @@ function ChartViewModel() {
     self.dragStartTime = 0;
     self.dragThreshold = 5; // ピクセル
     
+    // 複数選択関連
+    self.isSelecting = ko.observable(false);
+    self.selectedNodes = ko.observableArray([]);
+    self.selectedNodesCount = ko.computed(function() {
+        return self.selectedNodes().length;
+    });
+    self.selectionStart = null;
+    self.selectionCurrent = null;
+    self.selectionRectangle = null;
+    
+    // レンダリング制御フラグ
+    self.suppressAutoRender = false;
+    
     // 操作履歴（Undo/Redo）
     self.history = [];
     self.historyIndex = -1;
@@ -128,6 +141,7 @@ function ChartViewModel() {
         self.setupDragAndDrop();
         self.setupNavTabs();
         self.setupKeyboardShortcuts();
+        self.setupMultiSelection();
         self.renderMermaid();
         
         // 初期状態を履歴に追加
@@ -433,6 +447,7 @@ function ChartViewModel() {
                     setTimeout(() => {
                         self.setupZoomAndPan();
                         self.setupNodeClickHandlers();
+                        self.updateNodeSelection(); // 複数選択状態を復元
                     }, 100);
                 })
                 .catch(error => {
@@ -456,6 +471,7 @@ function ChartViewModel() {
         mermaidDisplay.removeEventListener('mousemove', self.handleMouseMove);
         mermaidDisplay.removeEventListener('mouseup', self.handleMouseUp);
         mermaidDisplay.removeEventListener('mouseleave', self.handleMouseLeave);
+        mermaidDisplay.removeEventListener('contextmenu', self.handleCanvasRightClick);
         
         // Add event listeners
         mermaidDisplay.addEventListener('wheel', self.handleWheel, { passive: false });
@@ -463,6 +479,7 @@ function ChartViewModel() {
         mermaidDisplay.addEventListener('mousemove', self.handleMouseMove);
         mermaidDisplay.addEventListener('mouseup', self.handleMouseUp);
         mermaidDisplay.addEventListener('mouseleave', self.handleMouseLeave);
+        mermaidDisplay.addEventListener('contextmenu', self.handleCanvasRightClick);
     };
     
     // マウスホイールでズーム
@@ -483,20 +500,44 @@ function ChartViewModel() {
         self.updateMermaidTransform();
     };
     
-    // マウスダウン（パン開始）
+    // マウスダウン（パン開始または選択開始）
     self.handleMouseDown = function(e) {
-        // インライン編集中やノードドラッグ中はパンを無効にする
+        // インライン編集中やノードドラッグ中は何もしない
         if (self.isInlineEditing() || self.isNodeDragging()) {
             return;
         }
         
-        // ノード上でのクリックの場合はパンしない
+        // ノード上でのクリックの場合はパンも選択もしない
         const target = e.target;
         if (target.closest && target.closest('g.node')) {
             return;
         }
         
-        if (e.button === 2) { // Right mouse button
+        if (e.button === 0) { // Left mouse button - 選択開始
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            const rect = mermaidDisplay.getBoundingClientRect();
+            
+            self.selectionStart = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            // Ctrlキーが押されていない場合は既存の選択をクリア（座標はリセットしない）
+            if (!e.ctrlKey && !e.metaKey) {
+                self.selectedNodes([]);
+                self.updateNodeSelection();
+            }
+            
+            self.isSelecting(true);
+            
+            // 選択中のスタイルを適用
+            const chartCanvas = document.getElementById('chart-canvas');
+            if (chartCanvas) {
+                chartCanvas.classList.add('selecting');
+            }
+            
+            e.preventDefault();
+        } else if (e.button === 2) { // Right mouse button - パン開始
             self.isDragging(true);
             self.lastMousePos = { x: e.clientX, y: e.clientY };
             
@@ -510,9 +551,10 @@ function ChartViewModel() {
         }
     };
     
-    // マウス移動（パン）
+    // マウス移動（パンまたは選択）
     self.handleMouseMove = function(e) {
         if (self.isDragging()) {
+            // パン処理
             const deltaX = e.clientX - self.lastMousePos.x;
             const deltaY = e.clientY - self.lastMousePos.y;
             
@@ -522,10 +564,22 @@ function ChartViewModel() {
             self.lastMousePos = { x: e.clientX, y: e.clientY };
             self.updateMermaidTransform();
             e.preventDefault();
+        } else if (self.isSelecting()) {
+            // 選択矩形の更新
+            const mermaidDisplay = document.getElementById('mermaid-display');
+            const rect = mermaidDisplay.getBoundingClientRect();
+            
+            self.selectionCurrent = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            self.updateSelectionRectangle();
+            e.preventDefault();
         }
     };
     
-    // マウスアップ（パン終了）
+    // マウスアップ（パンまたは選択終了）
     self.handleMouseUp = function(e) {
         if (e.button === 2 || self.isDragging()) { // Right mouse button or currently dragging
             self.isDragging(false);
@@ -535,10 +589,44 @@ function ChartViewModel() {
             if (mermaidDisplay) {
                 mermaidDisplay.classList.remove('panning');
             }
+        } else if (e.button === 0 && self.isSelecting()) { // Left mouse button - 選択終了
+            // 実際にドラッグ（移動）があったかチェック
+            const hasActualDrag = self.selectionCurrent && 
+                                  self.selectionStart &&
+                                  (Math.abs(self.selectionCurrent.x - self.selectionStart.x) > 5 ||
+                                   Math.abs(self.selectionCurrent.y - self.selectionStart.y) > 5);
+            
+            if (hasActualDrag) {
+                self.finishSelection();
+            } else {
+                // 単一クリックの場合は選択をキャンセル
+                self.isSelecting(false);
+                self.selectionStart = null;
+                self.selectionCurrent = null;
+                
+                // UI要素をクリア
+                const selectionRect = document.getElementById('selection-rectangle');
+                if (selectionRect) {
+                    selectionRect.classList.remove('active');
+                }
+                
+                const chartCanvas = document.getElementById('chart-canvas');
+                if (chartCanvas) {
+                    chartCanvas.classList.remove('selecting');
+                }
+                
+                // 既存の選択も単一クリック時はクリア（Ctrlキーが押されていない場合）
+                if (!e.ctrlKey && !e.metaKey) {
+                    self.selectedNodes([]);
+                    self.updateNodeSelection();
+                }
+            }
+            
+            e.preventDefault();
         }
     };
     
-    // マウスリーブ（パン終了）
+    // マウスリーブ（パンまたは選択終了）
     self.handleMouseLeave = function(e) {
         if (self.isDragging()) {
             self.isDragging(false);
@@ -548,6 +636,10 @@ function ChartViewModel() {
             if (mermaidDisplay) {
                 mermaidDisplay.classList.remove('panning');
             }
+        }
+        
+        if (self.isSelecting()) {
+            self.finishSelection();
         }
     };
     
@@ -565,6 +657,27 @@ function ChartViewModel() {
         self.panX(0);
         self.panY(0);
         self.updateMermaidTransform();
+    };
+    
+    // キャンバス右クリック処理
+    self.handleCanvasRightClick = function(event) {
+        const target = event.target;
+        
+        // ノード上での右クリックの場合は何もしない（ノード側で処理される）
+        if (target.closest && target.closest('g.node')) {
+            return;
+        }
+        
+        event.preventDefault();
+        
+        // 複数選択がある場合は複数選択用メニューを表示
+        if (self.selectedNodes().length > 0) {
+            self.showContextMenu(event.clientX, event.clientY);
+        }
+        // 単一選択の場合は選択をクリア
+        else {
+            self.clearNodeSelection();
+        }
     };
     
     // ノードクリックハンドラー設定
@@ -637,11 +750,21 @@ function ChartViewModel() {
         const nodeId = self.extractNodeId(nodeElement);
         if (!nodeId) return;
         
-        // 選択状態を更新
-        self.clearNodeSelection();
-        self.selectedNodeId(nodeId);
-        self.selectedNodeElement = nodeElement;
-        self.highlightSelectedNode(nodeElement);
+        // 複数選択されたノードの中に右クリックしたノードが含まれているかチェック
+        const isNodeInSelection = self.selectedNodes().indexOf(nodeId) !== -1;
+        
+        if (!isNodeInSelection) {
+            // 選択されていないノードを右クリックした場合は、従来の単一選択処理
+            self.clearNodeSelection();
+            self.selectedNodeId(nodeId);
+            self.selectedNodeElement = nodeElement;
+            self.highlightSelectedNode(nodeElement);
+            
+            // 複数選択もクリア
+            self.clearMultiSelection();
+            self.addNodeToSelection(nodeId);
+        }
+        // 既に選択されているノードを右クリックした場合は、選択状態を維持
         
         // コンテキストメニューを表示
         self.showContextMenu(event.clientX, event.clientY);
@@ -683,13 +806,21 @@ function ChartViewModel() {
     
     // コンテキストメニュー表示
     self.showContextMenu = function(x, y) {
-        const menu = document.getElementById('node-context-menu');
+        const selectedCount = self.selectedNodes().length;
+        const menuId = selectedCount > 1 ? 'multi-node-context-menu' : 'node-context-menu';
+        const menu = document.getElementById(menuId);
         if (!menu) return;
+        
+        // 他のメニューを隠す
+        self.hideContextMenu();
         
         menu.style.left = x + 'px';
         menu.style.top = y + 'px';
         menu.classList.add('show');
         self.contextMenuVisible(true);
+        
+        // 選択されたノード位置を保存（複数選択時のコンテキストメニュー用）
+        self.contextMenuPosition({ x: x, y: y });
         
         // 画面外に出る場合の調整
         setTimeout(() => {
@@ -708,17 +839,26 @@ function ChartViewModel() {
     
     // コンテキストメニューを隠す
     self.hideContextMenu = function() {
-        const menu = document.getElementById('node-context-menu');
-        if (menu) {
-            menu.classList.remove('show');
+        const singleMenu = document.getElementById('node-context-menu');
+        const multiMenu = document.getElementById('multi-node-context-menu');
+        
+        if (singleMenu) {
+            singleMenu.classList.remove('show');
         }
+        if (multiMenu) {
+            multiMenu.classList.remove('show');
+        }
+        
         self.contextMenuVisible(false);
     };
     
     // ドキュメントクリック処理
     self.handleDocumentClick = function(event) {
-        const menu = document.getElementById('node-context-menu');
-        if (menu && !menu.contains(event.target)) {
+        const singleMenu = document.getElementById('node-context-menu');
+        const multiMenu = document.getElementById('multi-node-context-menu');
+        
+        if (singleMenu && !singleMenu.contains(event.target) &&
+            multiMenu && !multiMenu.contains(event.target)) {
             self.hideContextMenu();
         }
     };
@@ -789,6 +929,8 @@ function ChartViewModel() {
     // ノードドラッグ終了
     self.handleNodeDragEnd = function(event) {
         const wasDragging = self.isNodeDragging();
+        const currentTime = Date.now();
+        const timeDiff = currentTime - self.dragStartTime;
         
         if (wasDragging) {
             // ドラッグ処理
@@ -812,8 +954,18 @@ function ChartViewModel() {
                 // 空の場所にドロップ - 新しいノードを作成
                 self.createChildNode(self.dragSourceNode.id, dropX, dropY);
             }
-        } else {
-            // 単純なクリック処理 - 何もしない（右クリックでメニュー表示）
+        } else if (self.dragSourceNode && timeDiff < 300) {
+            // 単純なクリック処理（300ms以内で移動距離が少ない場合）
+            const nodeId = self.dragSourceNode.id;
+            
+            if (event.ctrlKey || event.metaKey) {
+                // Ctrlキー押下時は選択を追加/削除
+                self.toggleNodeSelection(nodeId);
+            } else {
+                // 通常クリックは既存選択をクリアして新規選択
+                self.clearMultiSelection();
+                self.addNodeToSelection(nodeId);
+            }
         }
         
         // クリーンアップ
@@ -926,15 +1078,87 @@ function ChartViewModel() {
         const newNodeId = 'node_' + Date.now();
         const newNodeLabel = '新しいノード';
         
-        let code = self.currentMermaidCode();
+        // 親ノードがsubgraph内にあるかチェック
+        const parentSubgraph = self.getNodeSubgraph(parentId);
         
-        // 新しいノードと接続を追加
-        code += `\n    ${newNodeId}[${newNodeLabel}]`;
-        code += `\n    ${parentId} --> ${newNodeId}`;
+        // ドロップ位置がsubgraph内かチェック
+        const dropTargetSubgraph = self.getDropTargetSubgraph(x, y);
+        
+        let code = self.currentMermaidCode();
+        let message = '';
+        
+        if (parentSubgraph && dropTargetSubgraph && parentSubgraph.id === dropTargetSubgraph.id) {
+            // 同じsubgraph内でのドロップ: subgraph内に新ノード追加
+            code = self.addNodeToSubgraph(code, newNodeId, newNodeLabel, parentSubgraph.id);
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${parentSubgraph.name}グループ内に新しいノードを作成しました`;
+            
+        } else if (parentSubgraph && !dropTargetSubgraph) {
+            // subgraph内のノードからsubgraph外へのドロップ: subgraph外に新ノード追加
+            code += `\n    ${newNodeId}[${newNodeLabel}]`;
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${parentSubgraph.name}グループからグループ外に新しいノードを作成しました`;
+            
+        } else if (parentSubgraph && dropTargetSubgraph && parentSubgraph.id !== dropTargetSubgraph.id) {
+            // 異なるsubgraph間でのドロップ: ドロップ先のsubgraph内に新ノード追加
+            code = self.addNodeToSubgraph(code, newNodeId, newNodeLabel, dropTargetSubgraph.id);
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${parentSubgraph.name}グループから${dropTargetSubgraph.name}グループに新しいノードを作成しました`;
+            
+        } else if (!parentSubgraph && dropTargetSubgraph) {
+            // subgraph外のノードからsubgraph内へのドロップ: subgraph内に新ノード追加
+            code = self.addNodeToSubgraph(code, newNodeId, newNodeLabel, dropTargetSubgraph.id);
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = `${dropTargetSubgraph.name}グループ内に新しいノードを作成しました`;
+            
+        } else {
+            // 通常のケース: subgraph外に新ノード追加
+            code += `\n    ${newNodeId}[${newNodeLabel}]`;
+            code += `\n    ${parentId} --> ${newNodeId}`;
+            message = '新しい子ノードを作成しました';
+        }
         
         self.currentMermaidCode(code);
         self.addToHistory(`子ノード追加: ${parentId} -> ${newNodeId}`);
-        self.showSuccess('新しい子ノードを作成しました');
+        self.showSuccess(message);
+    };
+    
+    // subgraph内にノードを追加
+    self.addNodeToSubgraph = function(mermaidCode, nodeId, nodeLabel, subgraphId) {
+        const lines = mermaidCode.split('\n');
+        const resultLines = [];
+        let inTargetSubgraph = false;
+        let subgraphLevel = 0;
+        let insertIndex = -1;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            // subgraphの開始を検出
+            if (trimmedLine.startsWith('subgraph')) {
+                subgraphLevel++;
+                if (trimmedLine.includes(subgraphId)) {
+                    inTargetSubgraph = true;
+                }
+                resultLines.push(line);
+            }
+            // subgraphの終了を検出
+            else if (trimmedLine === 'end' && subgraphLevel > 0) {
+                if (inTargetSubgraph && subgraphLevel === 1) {
+                    // このsubgraphの終了前に新ノードを挿入
+                    resultLines.push(`        ${nodeId}[${nodeLabel}]`);
+                    inTargetSubgraph = false;
+                }
+                subgraphLevel--;
+                resultLines.push(line);
+            }
+            else {
+                resultLines.push(line);
+            }
+        }
+        
+        return resultLines.join('\n');
     };
     
     // ノードドロップ処理
@@ -967,6 +1191,24 @@ function ChartViewModel() {
                     case 's':
                         e.preventDefault();
                         self.saveChart();
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        self.selectAllNodes();
+                        break;
+                }
+            } else {
+                switch (e.key) {
+                    case 'Delete':
+                    case 'Backspace':
+                        e.preventDefault();
+                        if (self.selectedNodes().length > 0) {
+                            self.deleteSelectedNodes();
+                        }
+                        break;
+                    case 'Escape':
+                        e.preventDefault();
+                        self.clearMultiSelection();
                         break;
                 }
             }
@@ -1638,8 +1880,452 @@ function ChartViewModel() {
     
     // Mermaidコード変更時の自動レンダリング
     self.currentMermaidCode.subscribe(() => {
-        self.renderMermaid();
+        if (!self.suppressAutoRender) {
+            self.renderMermaid();
+        }
     });
+    
+    // 複数選択機能のメソッド群
+    
+    // 複数選択機能のセットアップ
+    self.setupMultiSelection = function() {
+        // 複数選択機能の初期化（特別な処理は不要）
+    };
+    
+    // 選択矩形の更新
+    self.updateSelectionRectangle = function() {
+        const selectionRect = document.getElementById('selection-rectangle');
+        if (!selectionRect || !self.isSelecting()) return;
+        
+        const startX = Math.min(self.selectionStart.x, self.selectionCurrent.x);
+        const startY = Math.min(self.selectionStart.y, self.selectionCurrent.y);
+        const width = Math.abs(self.selectionCurrent.x - self.selectionStart.x);
+        const height = Math.abs(self.selectionCurrent.y - self.selectionStart.y);
+        
+        
+        selectionRect.style.left = startX + 'px';
+        selectionRect.style.top = startY + 'px';
+        selectionRect.style.width = width + 'px';
+        selectionRect.style.height = height + 'px';
+        selectionRect.classList.add('active');
+    };
+    
+    // 選択完了処理
+    self.finishSelection = function() {
+        if (!self.isSelecting()) return;
+        
+        // 選択範囲内のノードを検出
+        const selectedNodeIds = self.getNodesInSelectionArea();
+        
+        // 選択されたノードを追加
+        selectedNodeIds.forEach(nodeId => {
+            if (self.selectedNodes().indexOf(nodeId) === -1) {
+                self.selectedNodes.push(nodeId);
+            }
+        });
+        
+        // 選択状態をクリア
+        self.isSelecting(false);
+        self.selectionStart = null;
+        self.selectionCurrent = null;
+        
+        // UI要素をクリア
+        const selectionRect = document.getElementById('selection-rectangle');
+        if (selectionRect) {
+            selectionRect.classList.remove('active');
+        }
+        
+        const chartCanvas = document.getElementById('chart-canvas');
+        if (chartCanvas) {
+            chartCanvas.classList.remove('selecting');
+        }
+        
+        // 選択されたノードを視覚的にハイライト
+        self.updateNodeSelection();
+    };
+    
+    // 選択範囲内のノードを取得
+    self.getNodesInSelectionArea = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return [];
+        
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        const selectedNodeIds = [];
+        
+        const selectionMinX = Math.min(self.selectionStart.x, self.selectionCurrent.x);
+        const selectionMinY = Math.min(self.selectionStart.y, self.selectionCurrent.y);
+        const selectionMaxX = Math.max(self.selectionStart.x, self.selectionCurrent.x);
+        const selectionMaxY = Math.max(self.selectionStart.y, self.selectionCurrent.y);
+        
+        nodes.forEach(node => {
+            const rect = node.getBoundingClientRect();
+            const mermaidDisplayRect = document.getElementById('mermaid-display').getBoundingClientRect();
+            
+            // ノードの位置をmermaid-display相対座標に変換
+            const nodeX = rect.left - mermaidDisplayRect.left + rect.width / 2;
+            const nodeY = rect.top - mermaidDisplayRect.top + rect.height / 2;
+            
+            // 選択範囲内にあるかチェック
+            if (nodeX >= selectionMinX && nodeX <= selectionMaxX &&
+                nodeY >= selectionMinY && nodeY <= selectionMaxY) {
+                const nodeId = self.extractNodeId(node);
+                if (nodeId) {
+                    selectedNodeIds.push(nodeId);
+                }
+            }
+        });
+        
+        return selectedNodeIds;
+    };
+    
+    // 複数選択をクリア
+    self.clearMultiSelection = function() {
+        self.selectedNodes([]);
+        
+        // 選択中の場合のみ座標とUI状態をリセット
+        if (self.isSelecting()) {
+            self.isSelecting(false);
+            self.selectionStart = null;
+            self.selectionCurrent = null;
+            
+            // UI要素をクリア
+            const selectionRect = document.getElementById('selection-rectangle');
+            if (selectionRect) {
+                selectionRect.classList.remove('active');
+            }
+            
+            const chartCanvas = document.getElementById('chart-canvas');
+            if (chartCanvas) {
+                chartCanvas.classList.remove('selecting');
+            }
+        }
+        
+        self.updateNodeSelection();
+    };
+    
+    // ノード選択の視覚的更新
+    self.updateNodeSelection = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return;
+        
+        // 全てのノードから選択状態を削除
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        nodes.forEach(node => {
+            node.classList.remove('multi-selected');
+        });
+        
+        // 選択されたノードにスタイルを適用
+        self.selectedNodes().forEach(nodeId => {
+            const nodeElement = mermaidContainer.querySelector(`g.node[id*="${nodeId}"]`);
+            if (nodeElement) {
+                nodeElement.classList.add('multi-selected');
+            }
+        });
+    };
+    
+    // 選択されたノードを削除
+    self.deleteSelectedNodes = function() {
+        const selectedCount = self.selectedNodes().length;
+        if (selectedCount === 0) {
+            self.showError('削除するノードが選択されていません');
+            return;
+        }
+        
+        if (confirm(`選択された${selectedCount}個のノードを削除しますか？`)) {
+            // 複数ノードの場合のみ自動レンダリングを一時的に無効化
+            if (selectedCount > 1) {
+                self.suppressAutoRender = true;
+            }
+            
+            // 複数ノードを一括削除
+            self.selectedNodes().forEach(nodeId => {
+                self.removeNodeFromMermaidCode(nodeId);
+            });
+            
+            // 自動レンダリング機能を復元
+            if (selectedCount > 1) {
+                self.suppressAutoRender = false;
+                // 一度だけ手動でレンダリング
+                self.renderMermaid();
+            }
+            
+            self.clearMultiSelection();
+            self.addToHistory(`複数ノード削除: ${selectedCount}個`);
+            self.showSuccess(`${selectedCount}個のノードを削除しました`);
+        }
+    };
+    
+    // 全ノード選択
+    self.selectAllNodes = function() {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return;
+        
+        const nodes = mermaidContainer.querySelectorAll('g.node');
+        const allNodeIds = [];
+        
+        nodes.forEach(node => {
+            const nodeId = self.extractNodeId(node);
+            if (nodeId) {
+                allNodeIds.push(nodeId);
+            }
+        });
+        
+        self.selectedNodes(allNodeIds);
+        self.updateNodeSelection();
+    };
+    
+    // 単一ノードを選択に追加
+    self.addNodeToSelection = function(nodeId) {
+        if (self.selectedNodes().indexOf(nodeId) === -1) {
+            self.selectedNodes.push(nodeId);
+            self.updateNodeSelection();
+        }
+    };
+    
+    // ノード選択の切り替え（選択済みの場合は解除、未選択の場合は追加）
+    self.toggleNodeSelection = function(nodeId) {
+        const currentSelection = self.selectedNodes();
+        const index = currentSelection.indexOf(nodeId);
+        
+        if (index !== -1) {
+            // 既に選択されている場合は削除
+            self.selectedNodes.splice(index, 1);
+        } else {
+            // 選択されていない場合は追加
+            self.selectedNodes.push(nodeId);
+        }
+        
+        self.updateNodeSelection();
+    };
+    
+    // 複数選択用のコンテキストメニュー機能
+    
+    // 選択されたノードをグループ化
+    self.groupSelectedNodes = function() {
+        const selectedCount = self.selectedNodes().length;
+        if (selectedCount < 2) {
+            self.showError('グループ化するには2個以上のノードを選択してください');
+            return;
+        }
+        
+        // グループ名をユーザーに入力してもらう
+        const groupName = prompt('グループ名を入力してください:', `グループ${Date.now()}`);
+        if (!groupName) {
+            return; // キャンセルされた場合
+        }
+        
+        // 現在のMermaidコードを取得
+        let mermaidCode = self.currentMermaidCode();
+        
+        // 選択されたノード群をsubgraphで囲む
+        const groupedCode = self.wrapNodesInSubgraph(mermaidCode, self.selectedNodes(), groupName);
+        
+        if (groupedCode !== mermaidCode) {
+            // 自動レンダリングを一時的に無効化
+            self.suppressAutoRender = true;
+            
+            // Mermaidコードを更新
+            self.currentMermaidCode(groupedCode);
+            
+            // 自動レンダリングを復元して手動レンダリング
+            self.suppressAutoRender = false;
+            self.renderMermaid();
+            
+            // 選択をクリア
+            self.clearMultiSelection();
+            
+            self.showSuccess(`${selectedCount}個のノードを「${groupName}」グループにまとめました`);
+            self.addToHistory(`ノードグループ化: ${groupName}`);
+        } else {
+            self.showError('グループ化に失敗しました');
+        }
+        
+        self.hideContextMenu();
+    };
+    
+    // ノード群をsubgraphで囲む
+    self.wrapNodesInSubgraph = function(mermaidCode, nodeIds, groupName) {
+        try {
+            const lines = mermaidCode.split('\n');
+            const resultLines = [];
+            const processedNodes = new Set();
+            let inSubgraph = false;
+            let subgraphLevel = 0;
+            
+            // subgraphの開始を挿入する位置を見つける
+            let insertIndex = -1;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // flowchartの宣言行をスキップ
+                if (line.startsWith('flowchart') || line.startsWith('graph')) {
+                    resultLines.push(lines[i]);
+                    continue;
+                }
+                
+                // subgraphの開始/終了を追跡
+                if (line.startsWith('subgraph')) {
+                    inSubgraph = true;
+                    subgraphLevel++;
+                    resultLines.push(lines[i]);
+                    continue;
+                } else if (line === 'end' && inSubgraph) {
+                    subgraphLevel--;
+                    if (subgraphLevel === 0) {
+                        inSubgraph = false;
+                    }
+                    resultLines.push(lines[i]);
+                    continue;
+                }
+                
+                // 空行やコメントをスキップ
+                if (line === '' || line.startsWith('%%')) {
+                    resultLines.push(lines[i]);
+                    continue;
+                }
+                
+                // subgraphの開始位置を決定（最初の有効なノード定義の前）
+                if (insertIndex === -1 && !inSubgraph && line.includes('[') && line.includes(']')) {
+                    insertIndex = resultLines.length;
+                }
+                
+                // 選択されたノードの定義行かチェック
+                let isSelectedNodeLine = false;
+                for (const nodeId of nodeIds) {
+                    if (line.includes(`${nodeId}[`) || line.includes(`${nodeId}(`)) {
+                        isSelectedNodeLine = true;
+                        processedNodes.add(nodeId);
+                        break;
+                    }
+                }
+                
+                // 選択されたノードの場合は後で処理するためスキップ
+                if (isSelectedNodeLine && !inSubgraph) {
+                    continue;
+                }
+                
+                resultLines.push(lines[i]);
+            }
+            
+            // subgraphの開始位置が見つからない場合は最後に追加
+            if (insertIndex === -1) {
+                insertIndex = resultLines.length;
+            }
+            
+            // subgraphを挿入
+            const subgraphLines = [];
+            subgraphLines.push(`    subgraph ${groupName.replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()} ["${groupName}"]`);
+            
+            // 選択されたノードの定義を収集
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine === '' || trimmedLine.startsWith('%%')) continue;
+                
+                for (const nodeId of nodeIds) {
+                    if ((trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) && 
+                        !trimmedLine.startsWith('subgraph') && trimmedLine !== 'end') {
+                        subgraphLines.push(`        ${trimmedLine}`);
+                        break;
+                    }
+                }
+            }
+            
+            subgraphLines.push('    end');
+            
+            // subgraphを適切な位置に挿入
+            resultLines.splice(insertIndex, 0, ...subgraphLines);
+            
+            return resultLines.join('\n');
+            
+        } catch (error) {
+            console.error('グループ化処理エラー:', error);
+            return mermaidCode; // エラーの場合は元のコードを返す
+        }
+    };
+    
+    // ノードがsubgraph内にあるかどうかを判定
+    self.getNodeSubgraph = function(nodeId) {
+        const mermaidCode = self.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+        
+        let currentSubgraph = null;
+        let subgraphLevel = 0;
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            // subgraphの開始を検出
+            if (trimmedLine.startsWith('subgraph')) {
+                subgraphLevel++;
+                if (subgraphLevel === 1) {
+                    // subgraph ID と名前を抽出
+                    const match = trimmedLine.match(/subgraph\s+(\w+)\s*\[?"?([^"]*)"?\]?/);
+                    if (match) {
+                        currentSubgraph = {
+                            id: match[1],
+                            name: match[2] || match[1]
+                        };
+                    }
+                }
+            }
+            // subgraphの終了を検出
+            else if (trimmedLine === 'end' && subgraphLevel > 0) {
+                subgraphLevel--;
+                if (subgraphLevel === 0) {
+                    currentSubgraph = null;
+                }
+            }
+            // ノード定義を検出
+            else if (currentSubgraph && subgraphLevel === 1) {
+                if (trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) {
+                    return currentSubgraph;
+                }
+            }
+        }
+        
+        return null; // subgraph外にある
+    };
+    
+    // ドロップ位置がsubgraph内かどうかを判定
+    self.getDropTargetSubgraph = function(dropX, dropY) {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return null;
+        
+        // subgraphの要素を取得
+        const subgraphs = mermaidContainer.querySelectorAll('g.cluster');
+        
+        for (const subgraph of subgraphs) {
+            const rect = subgraph.getBoundingClientRect();
+            const mermaidDisplayRect = document.getElementById('mermaid-display').getBoundingClientRect();
+            
+            // subgraphの境界を計算
+            const subgraphX = rect.left - mermaidDisplayRect.left;
+            const subgraphY = rect.top - mermaidDisplayRect.top;
+            const subgraphWidth = rect.width;
+            const subgraphHeight = rect.height;
+            
+            // ドロップ位置がsubgraph内にあるかチェック
+            if (dropX >= subgraphX && dropX <= subgraphX + subgraphWidth &&
+                dropY >= subgraphY && dropY <= subgraphY + subgraphHeight) {
+                
+                // subgraph IDを取得
+                const subgraphId = subgraph.id;
+                if (subgraphId) {
+                    // subgraph名を取得
+                    const labelElement = subgraph.querySelector('text');
+                    const subgraphName = labelElement ? labelElement.textContent : subgraphId;
+                    
+                    return {
+                        id: subgraphId,
+                        name: subgraphName,
+                        element: subgraph
+                    };
+                }
+            }
+        }
+        
+        return null; // subgraph外
+    };
 }
 
 // アプリケーション開始

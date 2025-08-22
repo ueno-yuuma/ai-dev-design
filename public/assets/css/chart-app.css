@@ -480,7 +480,7 @@ body {
 }
 
 /* ノードコンテキストメニュー */
-.node-context-menu {
+.node-context-menu, .multi-node-context-menu {
     position: absolute;
     background: white;
     border: 1px solid #ddd;
@@ -492,8 +492,33 @@ body {
     font-family: 'Noto Sans JP', sans-serif;
 }
 
-.node-context-menu.show {
+.node-context-menu.show, .multi-node-context-menu.show {
     display: block;
+}
+
+/* 複数選択用コンテキストメニューの特別なスタイル */
+.multi-node-context-menu {
+    min-width: 200px;
+}
+
+.multi-node-context-menu .menu-header {
+    padding: 12px 15px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.multi-node-context-menu .menu-header svg {
+    width: 16px;
+    height: 16px;
+    color: #007bff;
 }
 
 .menu-item {
@@ -642,6 +667,39 @@ body {
     stroke-dasharray: 5,5;
     opacity: 0.8;
 }
+
+/* ドラッグ選択機能 */
+.selection-rectangle {
+    position: absolute;
+    border: 2px dashed #007bff;
+    background-color: rgba(0, 123, 255, 0.1);
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+}
+
+.selection-rectangle.active {
+    display: block;
+}
+
+/* 選択されたノードのスタイル */
+.mermaid-container .node.multi-selected {
+    filter: drop-shadow(0 0 6px rgba(255, 193, 7, 0.8));
+}
+
+.mermaid-container .node.multi-selected rect,
+.mermaid-container .node.multi-selected circle,
+.mermaid-container .node.multi-selected polygon,
+.mermaid-container .node.multi-selected path {
+    stroke: #ffc107 !important;
+    stroke-width: 3px !important;
+}
+
+/* 選択中のカーソル */
+.chart-canvas.selecting {
+    cursor: crosshair;
+}
+
 
 /* レスポンシブ対応 */
 @media (max-width: 768px) {
