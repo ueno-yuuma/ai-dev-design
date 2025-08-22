@@ -15,6 +15,7 @@ return array(
 	'api/charts' => 'api/charts',
 	'api/chart/(:segment)' => 'api/chart/$1',
 	'api/health' => 'api/health',
+	'api/generate_name' => 'api/generate_name',
 	
 	// Auth Routes  
 	'api/login' => 'api/login',
