@@ -1839,9 +1839,20 @@ function ChartViewModel() {
         }
         
         if (confirm(`選択された${selectedCount}個のノードを削除しますか？`)) {
+            // 自動レンダリングを一時的に無効化
+            const originalSubscription = self.currentMermaidCode.subscribe;
+            self.currentMermaidCode.subscribe = function() {}; // 空関数で無効化
+            
+            // 複数ノードを一括削除
             self.selectedNodes().forEach(nodeId => {
                 self.removeNodeFromMermaidCode(nodeId);
             });
+            
+            // 自動レンダリング機能を復元
+            self.currentMermaidCode.subscribe = originalSubscription;
+            
+            // 一度だけ手動でレンダリング
+            self.renderMermaid();
             
             self.clearMultiSelection();
             self.addToHistory(`複数ノード削除: ${selectedCount}個`);
