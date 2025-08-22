@@ -50,6 +50,26 @@ const nodeComponent = {
         if (mermaidDisplay) {
             mermaidDisplay.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
+                
+                // ノードがクリックされていない場合、サブグラフのクリックを検出
+                const target = e.target;
+                const isNode = target.closest('g.node');
+                
+                if (!isNode) {
+                    const rect = mermaidDisplay.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    
+                    const subgraphInfo = this.detectSubgraphClick(x, y);
+                    if (subgraphInfo) {
+                        this.handleSubgraphRightClick(e, subgraphInfo);
+                    } else {
+                        // 空の場所のクリック
+                        this.hideContextMenu();
+                        this.clearNodeSelection();
+                        this.clearMultiSelection();
+                    }
+                }
             });
         }
     },
@@ -70,6 +90,17 @@ const nodeComponent = {
         }
 
         this.showContextMenu(event.clientX, event.clientY);
+    },
+    handleSubgraphRightClick: function(event, subgraphInfo) {
+        // ノード選択をクリア
+        this.clearNodeSelection();
+        this.clearMultiSelection();
+        
+        // サブグラフ情報を設定
+        this.currentSubgraph(subgraphInfo);
+        
+        // サブグラフ用コンテキストメニューを表示
+        this.showSubgraphContextMenu(event.clientX, event.clientY);
     },
     extractNodeId: function(nodeElement) {
         const id = nodeElement.id;

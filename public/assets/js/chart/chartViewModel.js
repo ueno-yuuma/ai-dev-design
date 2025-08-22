@@ -45,6 +45,10 @@ function ChartViewModel() {
     self.contextMenuVisible = ko.observable(false);
     self.isInlineEditing = ko.observable(false);
     self.inlineEditorType = null; // 'text' or 'type'
+    
+    // サブグラフ関連
+    self.currentSubgraph = ko.observable(null);
+    self.subgraphContextMenuVisible = ko.observable(false);
 
     // ノード間ドラッグ&ドロップ関連
     self.isNodeDragging = ko.observable(false);
@@ -117,6 +121,28 @@ function ChartViewModel() {
             self.renderMermaid();
         }
     });
+    
+    // サブグラフ関連のメソッド
+    self.renameSubgraph = function() {
+        if (self.currentSubgraph()) {
+            selectionComponent.renameSubgraph.call(self, self.currentSubgraph());
+            self.hideContextMenu();
+        }
+    };
+    
+    self.ungroupSubgraph = function() {
+        if (self.currentSubgraph()) {
+            selectionComponent.ungroupSubgraph.call(self, self.currentSubgraph());
+            self.hideContextMenu();
+        }
+    };
+    
+    self.deleteSubgraph = function() {
+        if (self.currentSubgraph()) {
+            selectionComponent.deleteSubgraph.call(self, self.currentSubgraph());
+            self.hideContextMenu();
+        }
+    };
 }
 
 // メソッドをプロトタイプにマージ

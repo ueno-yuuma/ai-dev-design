@@ -478,5 +478,236 @@ const groupingComponent = {
         }
 
         return null;
+    },
+
+    // サブグラフのクリック検出
+    detectSubgraphClick: function(x, y) {
+        const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
+        if (!mermaidContainer) return null;
+
+        const subgraphs = mermaidContainer.querySelectorAll('g.cluster');
+        
+        for (const subgraph of subgraphs) {
+            const rect = subgraph.getBoundingClientRect();
+            const mermaidDisplayRect = document.getElementById('mermaid-display').getBoundingClientRect();
+
+            const subgraphX = rect.left - mermaidDisplayRect.left;
+            const subgraphY = rect.top - mermaidDisplayRect.top;
+            const subgraphWidth = rect.width;
+            const subgraphHeight = rect.height;
+
+            if (x >= subgraphX && x <= subgraphX + subgraphWidth &&
+                y >= subgraphY && y <= subgraphY + subgraphHeight) {
+                
+                // サブグラフ内のノードをクリックしていないことを確認
+                const nodes = subgraph.querySelectorAll('g.node');
+                let clickedOnNode = false;
+                
+                for (const node of nodes) {
+                    const nodeRect = node.getBoundingClientRect();
+                    const nodeX = nodeRect.left - mermaidDisplayRect.left;
+                    const nodeY = nodeRect.top - mermaidDisplayRect.top;
+                    const nodeWidth = nodeRect.width;
+                    const nodeHeight = nodeRect.height;
+                    
+                    if (x >= nodeX && x <= nodeX + nodeWidth &&
+                        y >= nodeY && y <= nodeY + nodeHeight) {
+                        clickedOnNode = true;
+                        break;
+                    }
+                }
+                
+                if (!clickedOnNode) {
+                    const subgraphId = subgraph.id;
+                    if (subgraphId) {
+                        const labelElement = subgraph.querySelector('text');
+                        const subgraphName = labelElement ? labelElement.textContent : subgraphId;
+
+                        return {
+                            id: subgraphId,
+                            name: subgraphName,
+                            element: subgraph
+                        };
+                    }
+                }
+            }
+        }
+
+        return null;
+    },
+
+    // サブグラフ名変更
+    renameSubgraph: function(subgraphInfo) {
+        if (!subgraphInfo) return;
+        
+        const newName = prompt('新しいサブグラフ名を入力してください:', subgraphInfo.name);
+        if (!newName || newName === subgraphInfo.name) return;
+        
+        let mermaidCode = this.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+        
+        // サブグラフの定義行を見つけて更新
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.includes(`subgraph ${subgraphInfo.id}`)) {
+                // サブグラフの名前部分を更新
+                const match = trimmedLine.match(/^(\s*subgraph\s+\w+\s*\[?")[^"]*("?\]?)$/);
+                if (match) {
+                    lines[i] = line.replace(/^(\s*subgraph\s+\w+\s*\[?")[^"]*("?\]?)$/, `$1${newName}$2`);
+                    break;
+                }
+            }
+        }
+        
+        const updatedCode = lines.join('\n');
+        if (updatedCode !== mermaidCode) {
+            this.suppressAutoRender = true;
+            this.currentMermaidCode(updatedCode);
+            this.suppressAutoRender = false;
+            this.renderMermaid();
+            this.addToHistory(`サブグラフ名変更: ${subgraphInfo.name} → ${newName}`);
+            this.showSuccess(`サブグラフ名を「${newName}」に変更しました`);
+        } else {
+            this.showError('サブグラフ名変更に失敗しました');
+        }
+    },
+
+    // サブグラフのグループ解除
+    ungroupSubgraph: function(subgraphInfo) {
+        if (!subgraphInfo) {
+            console.error('ungroupSubgraph: subgraphInfo is null');
+            return;
+        }
+        
+        console.log('ungroupSubgraph: サブグラフ情報', subgraphInfo);
+        
+        if (!confirm(`サブグラフ「${subgraphInfo.name}」のグループを解除しますか？`)) return;
+        
+        let mermaidCode = this.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+        const resultLines = [];
+        
+        let inTargetSubgraph = false;
+        let subgraphLevel = 0;
+        let targetSubgraphLevel = 0;
+        let subgraphContent = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.startsWith('subgraph')) {
+                if (trimmedLine.includes(subgraphInfo.id)) {
+                    inTargetSubgraph = true;
+                    targetSubgraphLevel = subgraphLevel;
+                    // サブグラフの開始行はスキップ
+                    subgraphLevel++;
+                    continue;
+                } else {
+                    subgraphLevel++;
+                    resultLines.push(line);
+                }
+            } else if (trimmedLine === 'end') {
+                if (inTargetSubgraph && subgraphLevel === targetSubgraphLevel + 1) {
+                    // ターゲットサブグラフの終了
+                    inTargetSubgraph = false;
+                    // サブグラフの内容を現在の位置に展開
+                    resultLines.push(...subgraphContent);
+                    subgraphContent = [];
+                    subgraphLevel--;
+                    continue;
+                } else {
+                    subgraphLevel--;
+                    resultLines.push(line);
+                }
+            } else {
+                if (inTargetSubgraph) {
+                    // インデントを調整してサブグラフの内容を保存
+                    let adjustedLine = line;
+                    // 先頭のインデント（スペース4個またはタブ1個）を1レベル削除
+                    if (adjustedLine.startsWith('    ')) {
+                        adjustedLine = adjustedLine.substring(4);
+                    } else if (adjustedLine.startsWith('\t')) {
+                        adjustedLine = adjustedLine.substring(1);
+                    }
+                    subgraphContent.push(adjustedLine);
+                } else {
+                    resultLines.push(line);
+                }
+            }
+        }
+        
+        const updatedCode = resultLines.join('\n');
+        console.log('ungroupSubgraph: 元のコード長', mermaidCode.length);
+        console.log('ungroupSubgraph: 更新後コード長', updatedCode.length);
+        console.log('ungroupSubgraph: サブグラフ内容', subgraphContent);
+        
+        if (updatedCode !== mermaidCode) {
+            console.log('ungroupSubgraph: コードが変更されました、レンダリング開始');
+            this.suppressAutoRender = true;
+            this.currentMermaidCode(updatedCode);
+            this.suppressAutoRender = false;
+            this.renderMermaid();
+            this.addToHistory(`グループ解除: ${subgraphInfo.name}`);
+            this.showSuccess(`サブグラフ「${subgraphInfo.name}」のグループを解除しました`);
+        } else {
+            console.error('ungroupSubgraph: コードに変更がありません');
+            this.showError('グループ解除に失敗しました');
+        }
+    },
+
+    // サブグラフ削除
+    deleteSubgraph: function(subgraphInfo) {
+        if (!subgraphInfo) return;
+        
+        if (!confirm(`サブグラフ「${subgraphInfo.name}」とその中のすべての要素を削除しますか？`)) return;
+        
+        let mermaidCode = this.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+        const resultLines = [];
+        
+        let inTargetSubgraph = false;
+        let subgraphLevel = 0;
+        let targetSubgraphLevel = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmedLine = line.trim();
+            
+            if (trimmedLine.startsWith('subgraph')) {
+                if (trimmedLine.includes(subgraphInfo.id)) {
+                    inTargetSubgraph = true;
+                    targetSubgraphLevel = subgraphLevel;
+                    // サブグラフ全体をスキップ開始
+                }
+                subgraphLevel++;
+            } else if (trimmedLine === 'end') {
+                if (inTargetSubgraph && subgraphLevel === targetSubgraphLevel + 1) {
+                    // ターゲットサブグラフの終了
+                    inTargetSubgraph = false;
+                    subgraphLevel--;
+                    continue; // end行もスキップ
+                }
+                subgraphLevel--;
+            }
+            
+            if (!inTargetSubgraph) {
+                resultLines.push(line);
+            }
+        }
+        
+        const updatedCode = resultLines.join('\n');
+        if (updatedCode !== mermaidCode) {
+            this.suppressAutoRender = true;
+            this.currentMermaidCode(updatedCode);
+            this.suppressAutoRender = false;
+            this.renderMermaid();
+            this.addToHistory(`サブグラフ削除: ${subgraphInfo.name}`);
+            this.showSuccess(`サブグラフ「${subgraphInfo.name}」を削除しました`);
+        } else {
+            this.showError('サブグラフ削除に失敗しました');
+        }
     }
 };

@@ -216,5 +216,22 @@ const selectionComponent = {
     
     getDropTargetSubgraph: function(dropX, dropY) {
         return groupingComponent.getDropTargetSubgraph.call(this, dropX, dropY);
+    },
+    
+    // サブグラフ関連のメソッド（groupingComponentに委譲）
+    detectSubgraphClick: function(x, y) {
+        return groupingComponent.detectSubgraphClick.call(this, x, y);
+    },
+    
+    renameSubgraph: function(subgraphInfo) {
+        return groupingComponent.renameSubgraph.call(this, subgraphInfo);
+    },
+    
+    ungroupSubgraph: function(subgraphInfo) {
+        return groupingComponent.ungroupSubgraph.call(this, subgraphInfo);
+    },
+    
+    deleteSubgraph: function(subgraphInfo) {
+        return groupingComponent.deleteSubgraph.call(this, subgraphInfo);
     }
 };
