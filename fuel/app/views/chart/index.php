@@ -58,7 +58,7 @@
                             <span class="sidebar-text">保存済みチャート</span>
                         </div>
                         <div class="chart-items" data-bind="foreach: savedCharts">
-                            <div class="chart-item" data-bind="click: $parent.loadChart, attr: { title: title }">
+                            <div class="chart-item" data-bind="click: function(data, event) { $parent.loadChart(data); }, attr: { title: title }">
                                 <div class="sidebar-icon">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -336,6 +336,21 @@
             console.error('ERROR: Google Client ID is empty or not configured');
         }
     </script>
-    <script src="/assets/js/chart-app.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/config.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/utils.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/api.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/auth.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/chart.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/dnd.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/history.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/import_export.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/inline_edit.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/mermaid.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/node.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/selection.js?v=<?php echo time(); ?>"></script>
+<script src="/assets/js/chart/components/ui.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/zoom.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/chartViewModel.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/app.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
