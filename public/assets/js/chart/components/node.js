@@ -181,7 +181,7 @@ const nodeComponent = {
 
         const newNodeDef = shapes[newShape];
         if (newNodeDef) {
-            code = code.replace(/graph TD\s*\n/, `graph TD\n    ${newNodeDef}\n`);
+            code = code.replace(/graph (TD|LR)\s*\n/, `graph LR\n    ${newNodeDef}\n`);
         }
 
         this.currentMermaidCode(code);
@@ -225,10 +225,10 @@ const nodeComponent = {
 
         let currentCode = this.currentMermaidCode();
 
-        if (currentCode.includes('graph TD')) {
+        if (currentCode.includes('graph TD') || currentCode.includes('graph LR')) {
             currentCode += `\n    ${nodeId}[${nodeLabel}]`;
         } else {
-            currentCode = `graph TD\n    ${nodeId}[${nodeLabel}]`;
+            currentCode = `graph LR\n    ${nodeId}[${nodeLabel}]`;
         }
 
         this.currentMermaidCode(currentCode);

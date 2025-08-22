@@ -10,7 +10,7 @@ function ChartViewModel() {
     // チャート関連
     self.currentChart = ko.observable(null);
     self.currentChartTitle = ko.observable('');
-    self.currentMermaidCode = ko.observable('graph TD\n    A[開始] --> B[処理]\n    B --> C[終了]');
+    self.currentMermaidCode = ko.observable('graph LR\n    A[開始] --> B[処理]\n    B --> C[終了]');
     self.mermaidHtml = ko.observable('');
     self.savedCharts = ko.observableArray([]);
 

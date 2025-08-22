@@ -21,7 +21,9 @@ function initializeMermaid() {
                 useMaxWidth: true,
                 htmlLabels: true,
                 curve: 'basis',
-                padding: 20
+                padding: 20,
+                diagramPadding: 20,
+                rankdir: 'LR'
             }
         });
         mermaidInitialized = true;
