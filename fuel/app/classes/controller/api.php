@@ -474,4 +474,161 @@ class Controller_Api extends Controller_Rest
             unlink($session_file);
         }
     }
+
+    /**
+     *
+     * POST /api/generate_name
+     * Generate a group name using Gemini API
+     */
+    public function post_generate_name()
+    {
+        try {
+            // The router method already ensures the user is authenticated.
+            $node_labels = Input::json('node_labels');
+
+            if (empty($node_labels) || !is_array($node_labels)) {
+                return $this->response(['error' => 'Invalid input. "node_labels" is required as a non-empty array.'], 400);
+            }
+
+            // Input validation: limit array size and sanitize content
+            if (count($node_labels) > 10) {
+                return $this->response(['error' => 'Too many node labels. Maximum 10 allowed.'], 400);
+            }
+
+            // Sanitize node labels
+            $sanitized_labels = array_map(function($label) {
+                return substr(trim(strip_tags($label)), 0, 100);
+            }, $node_labels);
+
+            Config::load('google', true);
+            $api_key = Config::get('google.gemini_api_key');
+
+            if (empty($api_key)) {
+                \Log::error('Gemini API key is not configured.');
+                return $this->response(['error' => 'Service temporarily unavailable.'], 503);
+            }
+
+            $prompt_text = "以下の要素をグループ化するのに最もふさわしい、簡潔な名前を1つだけ提案してください。
+
+要素リスト：
+- " . implode("\n- ", $sanitized_labels);
+
+            // Secure HTTP client creation - remove DI injection vulnerability
+            $client = $this->create_secure_http_client();
+
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $api_key;
+
+            $body = [
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $prompt_text]
+                        ]
+                    ]
+                ],
+                'generationConfig' => [
+                    'temperature' => 0.5,
+                    'topK' => 1,
+                    'topP' => 1,
+                    'responseMimeType' => 'application/json',
+                    'responseSchema' => [
+                        'type' => 'OBJECT',
+                        'properties' => [
+                            'group_name' => ['type' => 'STRING']
+                        ],
+                        'required' => ['group_name']
+                    ]
+                ]
+            ];
+
+            $response = $client->post($url, ['json' => $body]);
+
+            if ($response->getStatusCode() !== 200) {
+                \Log::error('Gemini API request failed with status: ' . $response->getStatusCode());
+                return $this->response(['error' => 'Service temporarily unavailable.'], 503);
+            }
+
+            $result = json_decode($response->getBody(), true);
+            \Log::debug('Gemini API full response: ' . json_encode($result));
+            
+            // Check if candidates exist
+            if (!isset($result['candidates'][0])) {
+                \Log::error('Gemini API response did not contain candidates. Response: ' . json_encode($result));
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+            
+            $candidate = $result['candidates'][0];
+            $finishReason = $candidate['finishReason'] ?? 'UNKNOWN';
+            
+            // Handle different finish reasons
+            if ($finishReason === 'MAX_TOKENS') {
+                \Log::error('Gemini API response truncated due to MAX_TOKENS');
+                return $this->response(['error' => 'Response was too long. Please try with fewer items.'], 503);
+            }
+            
+            if ($finishReason !== 'STOP') {
+                \Log::error('Gemini API finished with reason: ' . $finishReason);
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+            
+            $responseText = $candidate['content']['parts'][0]['text'] ?? null;
+
+            if (empty($responseText)) {
+                \Log::error('Gemini API response did not contain text. Response structure: ' . json_encode($result));
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+
+            $responseJson = json_decode($responseText, true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                \Log::error('Failed to decode JSON from Gemini response. JSON error: ' . json_last_error_msg());
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+
+            $generated_text = $responseJson['group_name'] ?? null;
+
+            if (empty($generated_text)) {
+                \Log::error('Parsed JSON from Gemini did not contain group_name.');
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+            
+            // Additional sanitization for the generated name
+            $clean_name = trim($generated_text, " *\t\n\r\0\x0B\"'");
+            $clean_name = substr($clean_name, 0, 50); // Limit length
+            
+            if (empty($clean_name)) {
+                \Log::error('Generated group name is empty after sanitization.');
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+
+            return $this->response(['group_name' => $clean_name], 200);
+
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            \Log::error('Guzzle error in post_generate_name: ' . $e->getMessage());
+            return $this->response(['error' => 'Service temporarily unavailable.'], 503);
+        } catch (\Exception $e) {
+            \Log::error('General error in post_generate_name: ' . $e->getMessage());
+            return $this->response(['error' => 'An unexpected error occurred. Please try again later.'], 500);
+        }
+    }
+
+    /**
+     * Create a secure HTTP client with proper configuration
+     */
+    private function create_secure_http_client()
+    {
+        // Only allow in test environment for mocking
+        if (defined('PHPUNIT_RUNNING') && isset($this->http_client)) {
+            return $this->http_client;
+        }
+
+        // Production: always create a new, secure client
+        return new \GuzzleHttp\Client([
+            'timeout' => 30.0,
+            'verify' => true, // SSL verification
+            'http_errors' => false, // Don't throw exceptions on HTTP errors
+            'headers' => [
+                'User-Agent' => 'AI-Dev-Design/1.0'
+            ]
+        ]);
+    }
 }

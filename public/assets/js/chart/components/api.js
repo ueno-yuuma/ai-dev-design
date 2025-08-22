@@ -33,8 +33,25 @@ const apiComponent = {
                 return response.json();
             })
             .catch(error => {
-                self.showError(`API呼び出しエラー: ${error.message}`);
+                console.error(`API呼び出しエラー: ${error.message}`);
                 throw error;
+            });
+    },
+
+    generateGroupName: function(nodeLabels) {
+        const url = '/api/generate_name'; // The new route
+        const options = {
+            method: 'POST',
+            body: JSON.stringify({ node_labels: nodeLabels })
+        };
+
+        return this.apiCall(url, options)
+            .then(data => {
+                if (data && data.group_name) {
+                    return data.group_name;
+                } else {
+                    throw new Error('APIからグループ名が返されませんでした。');
+                }
             });
     }
 };
