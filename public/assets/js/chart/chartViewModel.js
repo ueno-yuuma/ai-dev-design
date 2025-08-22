@@ -71,6 +71,11 @@ function ChartViewModel() {
 
     // レンダリング制御フラグ
     self.suppressAutoRender = false;
+    self.isRendering = ko.observable(false);
+
+    // デバウンス機能
+    self.lastActionTime = 0;
+    self.actionDebounceDelay = 300; // 300ms
 
     // 操作履歴（Undo/Redo）
     self.history = [];

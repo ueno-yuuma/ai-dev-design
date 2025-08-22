@@ -25,6 +25,11 @@ const importExportComponent = {
         this.showSuccess('チャートをエクスポートしました');
     },
     importChart: function() {
+        // デバウンス・処理中チェック
+        if (!this.isActionAllowed() || this.isLoading() || this.isRendering()) {
+            return;
+        }
+
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = '.json';

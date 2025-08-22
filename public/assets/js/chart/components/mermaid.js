@@ -1,10 +1,17 @@
 const mermaidComponent = {
     renderMermaid: function() {
+        // レンダリング中の重複実行を防止
+        if (this.isRendering()) {
+            return;
+        }
+        this.isRendering(true);
+        
         try {
             let code = this.currentMermaidCode();
 
             if (!code || code.trim() === '') {
                 this.mermaidHtml('<div class="text-muted text-center p-5">フローチャートコードを入力してください</div>');
+                this.isRendering(false);
                 return;
             }
 
@@ -19,20 +26,24 @@ const mermaidComponent = {
                     const containerHtml = `<div class="mermaid-container" style="transform: scale(${this.zoomLevel()}) translate(${this.panX()}px, ${this.panY()}px);">${result.svg}</div>`;
                     this.mermaidHtml(containerHtml);
 
+                    // レンダリング完了後にイベントハンドラーを設定
                     setTimeout(() => {
                         this.setupZoomAndPan();
                         this.setupNodeClickHandlers();
                         this.updateNodeSelection();
                         this.adjustSubgraphLabels();
+                        this.isRendering(false); // レンダリング完了
                     }, 100);
                 })
                 .catch(error => {
                     console.error('Mermaidレンダリングエラー:', error);
                     this.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
+                    this.isRendering(false); // エラー時もフラグをリセット
                 });
         } catch (error) {
             console.error('renderMermaid例外:', error);
             this.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
+            this.isRendering(false); // 例外時もフラグをリセット
         }
     },
 
