@@ -33,7 +33,7 @@ const apiComponent = {
                 return response.json();
             })
             .catch(error => {
-                self.showError(`API呼び出しエラー: ${error.message}`);
+                console.error(`API呼び出しエラー: ${error.message}`);
                 throw error;
             });
     },

@@ -8,6 +8,9 @@ if (is_readable($dotenv_path)) {
         if (strpos(trim($line), '#') === 0) {
             continue;
         }
+        if (strpos($line, '=') === false) {
+            continue;
+        }
         list($name, $value) = explode('=', $line, 2);
         $name = trim($name);
         $value = trim($value);

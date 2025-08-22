@@ -72,16 +72,17 @@ const groupingComponent = {
             }
 
             // APIを呼び出し
+            const self = this;
             apiComponent.generateGroupName(nodeLabels)
-                .then(groupName => {
-                    this._performGrouping(groupName, nodeSubgraphInfo, groupType);
+                .then(function(groupName) {
+                    groupingComponent._performGrouping.call(self, groupName, nodeSubgraphInfo, groupType);
                 })
-                .catch(error => {
+                .catch(function(error) {
                     console.error('Error generating group name:', error);
-                    this.showError(`グループ名の自動生成に失敗しました: ${error.message}`);
+                    self.showError(`グループ名の自動生成に失敗しました: ${error.message}`);
                 })
-                .finally(() => {
-                    this.isLoading(false);
+                .finally(function() {
+                    self.isLoading(false);
                 });
 
         } else {
@@ -92,7 +93,7 @@ const groupingComponent = {
                 'グループ名を入力してください:';
                 
             const groupName = prompt(promptMessage, defaultName);
-            this._performGrouping(groupName, nodeSubgraphInfo, groupType);
+            groupingComponent._performGrouping.call(this, groupName, nodeSubgraphInfo, groupType);
         }
     },
 
@@ -158,20 +159,18 @@ const groupingComponent = {
             
             // ノード定義を抽出（より正確なパターンマッチング）
             for (const nodeId of nodeIds) {
-                const nodeDefRegex = new RegExp(`\\b${nodeId}([\[][^\]]+[\]]|\([^)]+\))`);
+                const nodeDefRegex = new RegExp(`\\b${nodeId}\\[([^\\]]+)\\]`);
                 const match = trimmedLine.match(nodeDefRegex);
                 if (match && !processedDefs.has(nodeId)) {
-                    nodeDefinitions.push(trimmedLine);
+                    const nodeDef = `${nodeId}[${match[1]}]`;
+                    nodeDefinitions.push(nodeDef);
                     processedDefs.add(nodeId);
                 }
             }
             
             // 選択されたノード間の接続を抽出
             if (trimmedLine.includes('-->')) {
-                const foundNodes = nodeIds.filter(nodeId => {
-                    const nodeRefRegex = new RegExp(`\\b${nodeId}([\[]|\()`);
-                    return nodeRefRegex.test(trimmedLine);
-                });
+                const foundNodes = nodeIds.filter(nodeId => trimmedLine.includes(nodeId));
                 if (foundNodes.length >= 2 && !processedConns.has(trimmedLine)) {
                     connections.push(trimmedLine);
                     processedConns.add(trimmedLine);
@@ -320,13 +319,20 @@ const groupingComponent = {
             // 選択されたノードに関連する行をスキップ
             let shouldSkip = false;
             
-            const isRelevantLine = nodeIds.some(nodeId => {
-                const nodeRefRegex = new RegExp(`\\b${nodeId}([\[]|\(|-->|$)`);
-                return nodeRefRegex.test(trimmedLine);
-            });
-
-            if (isRelevantLine) {
-                 shouldSkip = true;
+            if (inTargetSubgraph || targetNestLevel === 0) {
+                for (const nodeId of nodeIds) {
+                    // ノード定義行をスキップ
+                    if (trimmedLine.includes(`${nodeId}[`)) {
+                        shouldSkip = true;
+                        break;
+                    }
+                    
+                    // 選択されたノードに関連する接続もスキップ（内部・外部問わず）
+                    if (trimmedLine.includes('-->') && trimmedLine.includes(nodeId)) {
+                        shouldSkip = true;
+                        break;
+                    }
+                }
             }
             
             if (!shouldSkip) {

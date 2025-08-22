@@ -530,7 +530,6 @@ class Controller_Api extends Controller_Rest
                     'temperature' => 0.5,
                     'topK' => 1,
                     'topP' => 1,
-                    'maxOutputTokens' => 64,
                     'responseMimeType' => 'application/json',
                     'responseSchema' => [
                         'type' => 'OBJECT',
@@ -550,10 +549,32 @@ class Controller_Api extends Controller_Rest
             }
 
             $result = json_decode($response->getBody(), true);
-            $responseText = $result['candidates'][0]['content']['parts'][0]['text'] ?? null;
+            \Log::debug('Gemini API full response: ' . json_encode($result));
+            
+            // Check if candidates exist
+            if (!isset($result['candidates'][0])) {
+                \Log::error('Gemini API response did not contain candidates. Response: ' . json_encode($result));
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+            
+            $candidate = $result['candidates'][0];
+            $finishReason = $candidate['finishReason'] ?? 'UNKNOWN';
+            
+            // Handle different finish reasons
+            if ($finishReason === 'MAX_TOKENS') {
+                \Log::error('Gemini API response truncated due to MAX_TOKENS');
+                return $this->response(['error' => 'Response was too long. Please try with fewer items.'], 503);
+            }
+            
+            if ($finishReason !== 'STOP') {
+                \Log::error('Gemini API finished with reason: ' . $finishReason);
+                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
+            }
+            
+            $responseText = $candidate['content']['parts'][0]['text'] ?? null;
 
             if (empty($responseText)) {
-                \Log::error('Gemini API response did not contain text.');
+                \Log::error('Gemini API response did not contain text. Response structure: ' . json_encode($result));
                 return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
             }
 
