@@ -53,6 +53,11 @@ function ChartViewModel() {
     self.currentMermaidCode = ko.observable(DEFAULT_CHART_CONTENT);
     self.mermaidHtml = ko.observable('');
     self.savedCharts = ko.observableArray([]);
+    
+    // 変更追跡
+    self.hasUnsavedChanges = ko.observable(false);
+    self.originalChartTitle = ko.observable('');
+    self.originalMermaidCode = ko.observable('');
 
     // ノード関連
     self.selectedNode = ko.observable(null);
@@ -133,6 +138,30 @@ function ChartViewModel() {
         return canRedoResult;
     });
 
+    // 変更追跡の設定
+    self.setupChangeTracking = function() {
+        // タイトルの変更を監視
+        self.currentChartTitle.subscribe(function(newValue) {
+            if (self.originalChartTitle() !== newValue) {
+                self.hasUnsavedChanges(true);
+            }
+        });
+        
+        // Mermaidコードの変更を監視
+        self.currentMermaidCode.subscribe(function(newValue) {
+            if (self.originalMermaidCode() !== newValue) {
+                self.hasUnsavedChanges(true);
+            }
+        });
+    };
+    
+    // 変更追跡のリセット
+    self.resetChangeTracking = function() {
+        self.originalChartTitle(self.currentChartTitle());
+        self.originalMermaidCode(self.currentMermaidCode());
+        self.hasUnsavedChanges(false);
+    };
+
     // 初期化
     self.initialize = function() {
         initializeMermaid();
@@ -141,6 +170,7 @@ function ChartViewModel() {
         // self.setupNavTabs(); // This function is empty
         self.setupKeyboardShortcuts();
         self.setupMultiSelection();
+        self.setupChangeTracking();
         self.renderMermaid();
 
         // 初期状態を履歴に追加

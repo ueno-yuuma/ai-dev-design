@@ -42,6 +42,7 @@ const chartComponent = {
         this.currentChart(newChart);
         this.currentChartTitle(newChart.title);
         this.currentMermaidCode(newChart.content);
+        this.resetChangeTracking();
         this.addToHistory();
         this.renderMermaid();
         this.showSuccess('新しいチャートを作成しました');
@@ -70,6 +71,7 @@ const chartComponent = {
         .then(data => {
             if (data.success) {
                 this.currentChart(data.data);
+                this.resetChangeTracking();
                 this.loadCharts();
                 this.showSuccess(isUpdate ? 'チャートを更新しました' : 'チャートを保存しました');
             }
@@ -95,6 +97,7 @@ const chartComponent = {
         this.currentChart(chart);
         this.currentChartTitle(chart.title);
         this.currentMermaidCode(chart.content);
+        this.resetChangeTracking();
         this.addToHistory();
         this.renderMermaid();
         this.showSuccess(`「${chart.title}」を読み込みました`);

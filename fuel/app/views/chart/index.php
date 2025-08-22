@@ -109,8 +109,8 @@
                                    data-bind="value: currentChartTitle, valueUpdate: 'input'"
                                    maxlength="100">
                             <div class="chart-info">
-                                <span data-bind="text: currentChart() && currentChart().id ? '保存済み' : '未保存', 
-                                                 css: { 'status-saved': currentChart() && currentChart().id, 'status-unsaved': !currentChart() || !currentChart().id }"></span>
+                                <span data-bind="text: hasUnsavedChanges() ? '未保存' : '保存済み', 
+                                                 css: { 'status-saved': !hasUnsavedChanges(), 'status-unsaved': hasUnsavedChanges() }"></span>
                                 <span data-bind="text: currentChart() && currentChart().updated_at ? '・更新: ' + currentChart().updated_at : ''"></span>
                             </div>
                         </div>
