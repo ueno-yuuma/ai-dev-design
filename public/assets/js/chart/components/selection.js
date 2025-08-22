@@ -331,10 +331,33 @@ const selectionComponent = {
                 if (trimmedLine === '' || trimmedLine.startsWith('%%')) continue;
 
                 for (const nodeId of nodeIds) {
-                    if ((trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) &&
+                    // ノード定義行のみを抽出（矢印を含む行や他のノードを含む行は除外）
+                    const nodeDefPattern = new RegExp(`^\\s*${nodeId}\\[`);
+                    if (nodeDefPattern.test(trimmedLine) && 
                         !trimmedLine.startsWith('subgraph') && trimmedLine !== 'end') {
                         subgraphLines.push(`${nodeIndent}${trimmedLine}`);
                         break;
+                    }
+                }
+            }
+
+            // 選択されたノード間の関係も追加
+            for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine === '' || trimmedLine.startsWith('%%') || 
+                    trimmedLine.startsWith('subgraph') || trimmedLine === 'end') continue;
+
+                // 矢印を含む行で、両端が選択されたノードの場合のみ追加
+                if (trimmedLine.includes('-->')) {
+                    let includesSelectedNodes = 0;
+                    for (const nodeId of nodeIds) {
+                        if (trimmedLine.includes(nodeId)) {
+                            includesSelectedNodes++;
+                        }
+                    }
+                    // 選択されたノード同士の関係のみ追加
+                    if (includesSelectedNodes >= 2) {
+                        subgraphLines.push(`${nodeIndent}${trimmedLine}`);
                     }
                 }
             }
