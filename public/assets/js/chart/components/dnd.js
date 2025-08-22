@@ -156,10 +156,16 @@ const dndComponent = {
     createConnection: function(sourceId, targetId) {
         let code = this.currentMermaidCode();
 
-        const connectionPattern = new RegExp(`\\s*${sourceId}\\s*-->\\s*${targetId}`, 'g');
-        if (connectionPattern.test(code)) {
+        // 接続のみの行をマッチする（ノード宣言は除く）
+        const connectionPattern = new RegExp(`^\\s*${sourceId}\\s*-->\\s*${targetId}\\s*$`, 'gm');
+        
+        const connectionExists = connectionPattern.test(code);
+        
+        if (connectionExists) {
             // Connection exists, remove it
-            code = code.replace(connectionPattern, '');
+            // 新しい正規表現を作成（test()で内部状態が変わるため）
+            const removePattern = new RegExp(`^\\s*${sourceId}\\s*-->\\s*${targetId}\\s*$`, 'gm');
+            code = code.replace(removePattern, '');
             this.currentMermaidCode(code);
             this.addToHistory(`接続削除: ${sourceId} -> ${targetId}`);
             this.showSuccess('ノード間の接続を削除しました');
