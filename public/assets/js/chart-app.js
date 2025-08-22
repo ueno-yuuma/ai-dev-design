@@ -471,6 +471,7 @@ function ChartViewModel() {
         mermaidDisplay.removeEventListener('mousemove', self.handleMouseMove);
         mermaidDisplay.removeEventListener('mouseup', self.handleMouseUp);
         mermaidDisplay.removeEventListener('mouseleave', self.handleMouseLeave);
+        mermaidDisplay.removeEventListener('contextmenu', self.handleCanvasRightClick);
         
         // Add event listeners
         mermaidDisplay.addEventListener('wheel', self.handleWheel, { passive: false });
@@ -478,6 +479,7 @@ function ChartViewModel() {
         mermaidDisplay.addEventListener('mousemove', self.handleMouseMove);
         mermaidDisplay.addEventListener('mouseup', self.handleMouseUp);
         mermaidDisplay.addEventListener('mouseleave', self.handleMouseLeave);
+        mermaidDisplay.addEventListener('contextmenu', self.handleCanvasRightClick);
     };
     
     // マウスホイールでズーム
@@ -657,6 +659,27 @@ function ChartViewModel() {
         self.updateMermaidTransform();
     };
     
+    // キャンバス右クリック処理
+    self.handleCanvasRightClick = function(event) {
+        const target = event.target;
+        
+        // ノード上での右クリックの場合は何もしない（ノード側で処理される）
+        if (target.closest && target.closest('g.node')) {
+            return;
+        }
+        
+        event.preventDefault();
+        
+        // 複数選択がある場合は複数選択用メニューを表示
+        if (self.selectedNodes().length > 0) {
+            self.showContextMenu(event.clientX, event.clientY);
+        }
+        // 単一選択の場合は選択をクリア
+        else {
+            self.clearNodeSelection();
+        }
+    };
+    
     // ノードクリックハンドラー設定
     self.setupNodeClickHandlers = function() {
         const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
@@ -727,11 +750,21 @@ function ChartViewModel() {
         const nodeId = self.extractNodeId(nodeElement);
         if (!nodeId) return;
         
-        // 選択状態を更新
-        self.clearNodeSelection();
-        self.selectedNodeId(nodeId);
-        self.selectedNodeElement = nodeElement;
-        self.highlightSelectedNode(nodeElement);
+        // 複数選択されたノードの中に右クリックしたノードが含まれているかチェック
+        const isNodeInSelection = self.selectedNodes().indexOf(nodeId) !== -1;
+        
+        if (!isNodeInSelection) {
+            // 選択されていないノードを右クリックした場合は、従来の単一選択処理
+            self.clearNodeSelection();
+            self.selectedNodeId(nodeId);
+            self.selectedNodeElement = nodeElement;
+            self.highlightSelectedNode(nodeElement);
+            
+            // 複数選択もクリア
+            self.clearMultiSelection();
+            self.addNodeToSelection(nodeId);
+        }
+        // 既に選択されているノードを右クリックした場合は、選択状態を維持
         
         // コンテキストメニューを表示
         self.showContextMenu(event.clientX, event.clientY);
@@ -773,13 +806,21 @@ function ChartViewModel() {
     
     // コンテキストメニュー表示
     self.showContextMenu = function(x, y) {
-        const menu = document.getElementById('node-context-menu');
+        const selectedCount = self.selectedNodes().length;
+        const menuId = selectedCount > 1 ? 'multi-node-context-menu' : 'node-context-menu';
+        const menu = document.getElementById(menuId);
         if (!menu) return;
+        
+        // 他のメニューを隠す
+        self.hideContextMenu();
         
         menu.style.left = x + 'px';
         menu.style.top = y + 'px';
         menu.classList.add('show');
         self.contextMenuVisible(true);
+        
+        // 選択されたノード位置を保存（複数選択時のコンテキストメニュー用）
+        self.contextMenuPosition({ x: x, y: y });
         
         // 画面外に出る場合の調整
         setTimeout(() => {
@@ -798,17 +839,26 @@ function ChartViewModel() {
     
     // コンテキストメニューを隠す
     self.hideContextMenu = function() {
-        const menu = document.getElementById('node-context-menu');
-        if (menu) {
-            menu.classList.remove('show');
+        const singleMenu = document.getElementById('node-context-menu');
+        const multiMenu = document.getElementById('multi-node-context-menu');
+        
+        if (singleMenu) {
+            singleMenu.classList.remove('show');
         }
+        if (multiMenu) {
+            multiMenu.classList.remove('show');
+        }
+        
         self.contextMenuVisible(false);
     };
     
     // ドキュメントクリック処理
     self.handleDocumentClick = function(event) {
-        const menu = document.getElementById('node-context-menu');
-        if (menu && !menu.contains(event.target)) {
+        const singleMenu = document.getElementById('node-context-menu');
+        const multiMenu = document.getElementById('multi-node-context-menu');
+        
+        if (singleMenu && !singleMenu.contains(event.target) &&
+            multiMenu && !multiMenu.contains(event.target)) {
             self.hideContextMenu();
         }
     };
@@ -1974,6 +2024,22 @@ function ChartViewModel() {
         }
         
         self.updateNodeSelection();
+    };
+    
+    // 複数選択用のコンテキストメニュー機能
+    
+    // 選択されたノードをグループ化
+    self.groupSelectedNodes = function() {
+        const selectedCount = self.selectedNodes().length;
+        if (selectedCount < 2) {
+            self.showError('グループ化するには2個以上のノードを選択してください');
+            return;
+        }
+        
+        // グループ化機能の実装（将来的に拡張予定）
+        self.showSuccess(`${selectedCount}個のノードをグループ化しました`);
+        self.hideContextMenu();
+        self.addToHistory(`ノードグループ化: ${selectedCount}個`);
     };
 }
 
