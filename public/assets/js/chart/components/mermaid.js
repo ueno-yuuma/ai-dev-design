@@ -1,17 +1,13 @@
 const mermaidComponent = {
     renderMermaid: function() {
-        console.log('renderMermaid called');
         // レンダリング中の重複実行を防止
         if (this.isRendering()) {
-            console.log('renderMermaid: already rendering, skipping');
             return;
         }
         this.isRendering(true);
-        console.log('renderMermaid: starting render process');
         
         try {
             let code = this.currentMermaidCode();
-            console.log('renderMermaid: current code:', code);
 
             if (!code || code.trim() === '') {
                 this.mermaidHtml('<div class="text-muted text-center p-5">フローチャートコードを入力してください</div>');
@@ -25,13 +21,10 @@ const mermaidComponent = {
             element.className = 'mermaid';
             element.textContent = code;
 
-            console.log('renderMermaid: calling mermaid.render with code length:', code.length);
             mermaid.render('mermaid-svg', code)
                 .then(result => {
-                    console.log('renderMermaid: mermaid.render successful');
                     const containerHtml = `<div class="mermaid-container" style="transform: scale(${this.zoomLevel()}) translate(${this.panX()}px, ${this.panY()}px);">${result.svg}</div>`;
                     this.mermaidHtml(containerHtml);
-                    console.log('renderMermaid: HTML updated');
 
                     // レンダリング完了後にイベントハンドラーを設定
                     setTimeout(() => {
@@ -43,13 +36,12 @@ const mermaidComponent = {
                     }, 100);
                 })
                 .catch(error => {
-                    console.error('renderMermaid: mermaid.render failed:', error);
-                    console.error('renderMermaid: failed code was:', code);
+                    console.error('Mermaidレンダリングエラー:', error);
                     this.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
                     this.isRendering(false); // エラー時もフラグをリセット
                 });
         } catch (error) {
-            console.error('renderMermaid例外:', error);
+            console.error('Mermaidレンダリング例外:', error);
             this.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
             this.isRendering(false); // 例外時もフラグをリセット
         }
