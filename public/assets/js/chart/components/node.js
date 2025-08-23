@@ -219,39 +219,52 @@ const nodeComponent = {
     },
     removeNodeFromMermaidCode: function(nodeId) {
         let code = this.currentMermaidCode();
-
-        const nodePatterns = [
-            new RegExp(`\\s*${nodeId}\\[[^\\]]+\\]`, 'g'),
-            new RegExp(`\\s*${nodeId}\\([^\\)]+\\)`, 'g'),
-            new RegExp(`\\s*${nodeId}\\{[^\\}]+\\}`, 'g'),
-            new RegExp(`\\s*${nodeId}\\[\\[[^\\]]+\\]\\]`, 'g')
-        ];
-
-        nodePatterns.forEach((pattern, index) => {
-            const matches = code.match(pattern);
-            if (matches) {
-                code = code.replace(pattern, '');
-            }
-        });
+        const lines = code.split('\n');
+        const resultLines = [];
 
         // 正確なnode IDのエスケープ
         const escapedNodeId = nodeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         
-        const connectionPatterns = [
-            new RegExp(`\\s*[A-Za-z0-9_]+\\s*-->\\s*${escapedNodeId}\\b`, 'g'),
-            new RegExp(`\\s*${escapedNodeId}\\s*-->\\s*[A-Za-z0-9_]+`, 'g'),
-            new RegExp(`\\s*[A-Za-z0-9_]+\\s*->>\\s*${escapedNodeId}\\b`, 'g'),
-            new RegExp(`\\s*${escapedNodeId}\\s*->>\\s*[A-Za-z0-9_]+`, 'g')
-        ];
-
-        connectionPatterns.forEach((pattern, index) => {
-            const matches = code.match(pattern);
-            if (matches) {
-                code = code.replace(pattern, '');
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            let shouldSkip = false;
+            
+            // ノード定義行をスキップ
+            const nodeDefPatterns = [
+                new RegExp(`^\\s*${escapedNodeId}\\[[^\\]]+\\]\\s*$`),
+                new RegExp(`^\\s*${escapedNodeId}\\([^\\)]+\\)\\s*$`),
+                new RegExp(`^\\s*${escapedNodeId}\\{[^\\}]+\\}\\s*$`),
+                new RegExp(`^\\s*${escapedNodeId}\\[\\[[^\\]]+\\]\\]\\s*$`)
+            ];
+            
+            for (const pattern of nodeDefPatterns) {
+                if (pattern.test(line)) {
+                    shouldSkip = true;
+                    break;
+                }
             }
-        });
+            
+            // 接続行をスキップ（該当ノードを含む行）
+            if (!shouldSkip && trimmedLine.includes('-->')) {
+                const connectionPatterns = [
+                    new RegExp(`\\b${escapedNodeId}\\s*-->`),
+                    new RegExp(`-->\\s*${escapedNodeId}\\b`)
+                ];
+                
+                for (const pattern of connectionPatterns) {
+                    if (pattern.test(trimmedLine)) {
+                        shouldSkip = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!shouldSkip) {
+                resultLines.push(line);
+            }
+        }
 
-        this.currentMermaidCode(code);
+        this.currentMermaidCode(resultLines.join('\n'));
     },
     updateNode: function() {
         this.editNode();
@@ -363,11 +376,14 @@ const nodeComponent = {
             // 元ノードのテキストを取得（削除前に）
             const nodeText = this.getNodeText(nodeId);
             
+            // 0. 元ノードのサブグラフ所属を検出
+            const subgraphInfo = this.getNodeSubgraphInfo(nodeId);
+            
             // 1. 元ノードの接続情報を取得
             const originalConnections = this.getNodeConnections(nodeId);
             
             // 2. 分割ノードを生成
-            const newNodeIds = this.createSplitNodes(nodeId, splitResult.splits);
+            const newNodeIds = this.createSplitNodesInSubgraph(nodeId, splitResult.splits, subgraphInfo);
             
             // 3. 外部接続を継承
             this.inheritExternalConnections(originalConnections, newNodeIds, splitResult.splits);
@@ -506,11 +522,14 @@ const nodeComponent = {
             // 分割処理中は自動レンダリングを抑制
             this.suppressAutoRender = true;
             
+            // 0. 元ノードのサブグラフ所属を検出
+            const subgraphInfo = this.getNodeSubgraphInfo(this.currentSplitNodeId);
+            
             // 1. 元ノードの接続情報を取得
             const originalConnections = this.getNodeConnections(this.currentSplitNodeId);
             
             // 2. 分割ノードを生成
-            const newNodeIds = this.createSplitNodes(this.currentSplitNodeId, updatedSplits);
+            const newNodeIds = this.createSplitNodesInSubgraph(this.currentSplitNodeId, updatedSplits, subgraphInfo);
             
             // 3. 外部接続を継承
             this.inheritExternalConnections(originalConnections, newNodeIds, updatedSplits);
@@ -604,6 +623,7 @@ const nodeComponent = {
 
     createInternalConnections: function(newNodeIds, connectionSpecs) {
         let code = this.currentMermaidCode();
+        const connectionsToAdd = [];
         
         if (connectionSpecs && connectionSpecs.length > 0) {
             // AIが提案した接続を使用
@@ -612,16 +632,135 @@ const nodeComponent = {
                     const fromNode = newNodeIds[conn.from_index];
                     const toNode = newNodeIds[conn.to_index];
                     const arrow = conn.connection_type === 'conditional' ? '-.->': '-->';
-                    code += `\n    ${fromNode} ${arrow} ${toNode}`;
+                    const connectionLine = `    ${fromNode} ${arrow} ${toNode}`;
+                    
+                    // 重複チェック
+                    if (!connectionsToAdd.includes(connectionLine) && !code.includes(connectionLine)) {
+                        connectionsToAdd.push(connectionLine);
+                    }
                 }
             });
         } else {
             // デフォルト: シーケンシャル接続
             for (let i = 0; i < newNodeIds.length - 1; i++) {
-                code += `\n    ${newNodeIds[i]} --> ${newNodeIds[i + 1]}`;
+                const connectionLine = `    ${newNodeIds[i]} --> ${newNodeIds[i + 1]}`;
+                if (!connectionsToAdd.includes(connectionLine) && !code.includes(connectionLine)) {
+                    connectionsToAdd.push(connectionLine);
+                }
             }
         }
         
+        if (connectionsToAdd.length > 0) {
+            code += '\n' + connectionsToAdd.join('\n');
+        }
+        
         this.currentMermaidCode(code);
+    },
+
+    // ノードのサブグラフ所属情報を取得
+    getNodeSubgraphInfo: function(nodeId) {
+        const mermaidCode = this.currentMermaidCode();
+        const lines = mermaidCode.split('\n');
+
+        let subgraphStack = [];
+        let currentLevel = 0;
+
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+
+            if (trimmedLine.startsWith('subgraph')) {
+                const match = trimmedLine.match(/subgraph\s+(\w+)\s*[\[]?"?([^"]*)"?[\]]?/);
+                if (match) {
+                    const subgraphInfo = {
+                        id: match[1],
+                        name: match[2] || match[1],
+                        level: currentLevel
+                    };
+                    subgraphStack.push(subgraphInfo);
+                    currentLevel++;
+                }
+            }
+            else if (trimmedLine === 'end' && subgraphStack.length > 0) {
+                currentLevel--;
+                if (subgraphStack.length > 0 && subgraphStack[subgraphStack.length - 1].level === currentLevel) {
+                    subgraphStack.pop();
+                }
+            }
+            else if (subgraphStack.length > 0) {
+                // ノード定義を検出
+                if (trimmedLine.includes(`${nodeId}[`) || trimmedLine.includes(`${nodeId}(`)) {
+                    return {
+                        parentSubgraph: subgraphStack[subgraphStack.length - 1],
+                        nestLevel: currentLevel,
+                        subgraphPath: subgraphStack.slice()
+                    };
+                }
+            }
+        }
+
+        return null; // サブグラフに所属していない
+    },
+
+    // サブグラフ対応の分割ノード作成
+    createSplitNodesInSubgraph: function(originalNodeId, splits, subgraphInfo) {
+        const newNodeIds = [];
+        let code = this.currentMermaidCode();
+        
+        if (!Array.isArray(splits)) {
+            return newNodeIds;
+        }
+
+        if (subgraphInfo) {
+            // サブグラフ内にノードを作成
+            const lines = code.split('\n');
+            const updatedLines = [];
+            let inTargetSubgraph = false;
+            let currentLevel = 0;
+            let targetLevel = subgraphInfo.nestLevel;
+            let nodesInserted = false;
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const trimmedLine = line.trim();
+
+                if (trimmedLine.startsWith('subgraph')) {
+                    if (subgraphInfo.parentSubgraph && trimmedLine.includes(subgraphInfo.parentSubgraph.id)) {
+                        inTargetSubgraph = true;
+                    }
+                    currentLevel++;
+                    updatedLines.push(line);
+                } else if (trimmedLine === 'end') {
+                    if (inTargetSubgraph && currentLevel === targetLevel && !nodesInserted) {
+                        // サブグラフの終了直前に分割ノードを挿入
+                        const indent = '    '.repeat(targetLevel);
+                        splits.forEach((split, index) => {
+                            const nodeId = `${originalNodeId}_split_${index + 1}`;
+                            newNodeIds.push(nodeId);
+                            const name = split.title || split.name || `Split ${index + 1}`;
+                            updatedLines.push(`${indent}${nodeId}[${name}]`);
+                        });
+                        nodesInserted = true;
+                        inTargetSubgraph = false;
+                    }
+                    currentLevel--;
+                    updatedLines.push(line);
+                } else {
+                    updatedLines.push(line);
+                }
+            }
+
+            code = updatedLines.join('\n');
+        } else {
+            // ルートレベルにノードを作成（既存の処理）
+            splits.forEach((split, index) => {
+                const nodeId = `${originalNodeId}_split_${index + 1}`;
+                newNodeIds.push(nodeId);
+                const name = split.title || split.name || `Split ${index + 1}`;
+                code += `\n    ${nodeId}[${name}]`;
+            });
+        }
+
+        this.currentMermaidCode(code);
+        return newNodeIds;
     }
 };
