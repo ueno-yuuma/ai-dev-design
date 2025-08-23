@@ -410,6 +410,7 @@
     <script src="/assets/js/chart/components/inline_edit.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/mermaid.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/node.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/nodeSplit.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/selection/grouping.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/selection.js?v=<?php echo time(); ?>"></script>
 <script src="/assets/js/chart/components/ui.js?v=<?php echo time(); ?>"></script>
