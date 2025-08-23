@@ -695,7 +695,18 @@ class Controller_Api extends Controller_Rest
 → 工程1：「情報収集」
 → 工程2：「構成検討」  
 → 工程3：「文書作成」
-→ 工程4：「レビュー・修正」";
+→ 工程4：「レビュー・修正」
+
+レスポンス例：
+{
+  \"can_split\": true,
+  \"splits\": [
+    {\"name\": \"情報収集\", \"sequence_order\": 1, \"should_receive_input\": true},
+    {\"name\": \"構成検討\", \"sequence_order\": 2},
+    {\"name\": \"文書作成\", \"sequence_order\": 3},
+    {\"name\": \"レビュー・修正\", \"sequence_order\": 4, \"should_provide_output\": true}
+  ]
+}";
 
         $client = $this->create_secure_http_client();
         $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $api_key;
@@ -718,13 +729,12 @@ class Controller_Api extends Controller_Rest
                             'items' => [
                                 'type' => 'OBJECT',
                                 'properties' => [
-                                    'title' => ['type' => 'STRING'],
-                                    'content' => ['type' => 'STRING'],
+                                    'name' => ['type' => 'STRING'],
                                     'should_receive_input' => ['type' => 'BOOLEAN'],
                                     'should_provide_output' => ['type' => 'BOOLEAN'],
                                     'sequence_order' => ['type' => 'INTEGER']
                                 ],
-                                'required' => ['title', 'content', 'sequence_order']
+                                'required' => ['name', 'sequence_order']
                             ]
                         ],
                         'internal_connections' => [
