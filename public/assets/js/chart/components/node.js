@@ -218,9 +218,7 @@ const nodeComponent = {
         this.currentMermaidCode(code);
     },
     removeNodeFromMermaidCode: function(nodeId) {
-        console.log('removeNodeFromMermaidCode called for:', nodeId);
         let code = this.currentMermaidCode();
-        console.log('Code before node removal:', code);
 
         const nodePatterns = [
             new RegExp(`\\s*${nodeId}\\[[^\\]]+\\]`, 'g'),
@@ -232,12 +230,9 @@ const nodeComponent = {
         nodePatterns.forEach((pattern, index) => {
             const matches = code.match(pattern);
             if (matches) {
-                console.log(`Node pattern ${index} matches:`, matches);
                 code = code.replace(pattern, '');
             }
         });
-
-        console.log('Code after node definition removal:', code);
 
         // 正確なnode IDのエスケープ
         const escapedNodeId = nodeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -252,14 +247,11 @@ const nodeComponent = {
         connectionPatterns.forEach((pattern, index) => {
             const matches = code.match(pattern);
             if (matches) {
-                console.log(`Connection pattern ${index} matches:`, matches);
                 code = code.replace(pattern, '');
             }
         });
 
-        console.log('Code after connection removal:', code);
         this.currentMermaidCode(code);
-        console.log('After removeNodeFromMermaidCode currentMermaidCode:', this.currentMermaidCode());
     },
     updateNode: function() {
         this.editNode();
@@ -309,17 +301,13 @@ const nodeComponent = {
         
         apiComponent.analyzeSplitNode(nodeInfo.text, connections)
             .then(result => {
-                console.log('Split analysis result:', result);
-                console.log('Splits array:', result.splits);
                 if (result.can_split) {
-                    console.log('Executing split directly for node:', nodeId);
                     this.executeDirectSplit(nodeId, result);
                 } else {
                     this.showError('このノードは分割できません');
                 }
             })
             .catch(error => {
-                console.error('Node split analysis error:', error);
                 this.showError('分割分析に失敗しました: ' + error.message);
             })
             .finally(() => {
@@ -362,8 +350,6 @@ const nodeComponent = {
     },
 
     executeDirectSplit: function(nodeId, splitResult) {
-        console.log('executeDirectSplit called with:', nodeId, splitResult);
-        console.log('splitResult.splits details:', JSON.stringify(splitResult.splits, null, 2));
         
         if (!splitResult.splits || splitResult.splits.length === 0) {
             this.showError('分割データが不正です');
@@ -379,10 +365,8 @@ const nodeComponent = {
             
             // 1. 元ノードの接続情報を取得
             const originalConnections = this.getNodeConnections(nodeId);
-            console.log('Original connections:', originalConnections);
             
             // 2. 分割ノードを生成
-            console.log('Passing splits to createSplitNodes:', splitResult.splits);
             const newNodeIds = this.createSplitNodes(nodeId, splitResult.splits);
             
             // 3. 外部接続を継承
@@ -392,29 +376,24 @@ const nodeComponent = {
             this.createInternalConnections(newNodeIds, splitResult.internal_connections || []);
             
             // 5. 元ノードを削除
-            console.log('Removing original node:', nodeId);
             this.removeNodeFromMermaidCode(nodeId);
             
             // 6. 履歴に追加
-            console.log('Adding to history:', `ノード分割: ${nodeText} → ${splitResult.splits.length}個`);
             this.addToHistory(`ノード分割: ${nodeText} → ${splitResult.splits.length}個`);
             
             // 7. 自動レンダリング抑制を解除してレンダリング実行
-            console.log('Final Mermaid code before rendering:', this.currentMermaidCode());
             this.suppressAutoRender = false;
             this.renderMermaid();
             
             this.showSuccess(`ノードを${splitResult.splits.length}個に分割しました`);
             
         } catch (error) {
-            console.error('Direct split execution error:', error);
             this.suppressAutoRender = false; // エラー時もフラグをリセット
             this.showError('分割実行に失敗しました: ' + error.message);
         }
     },
 
     showSplitDialog: function(nodeId, splitResult) {
-        console.log('showSplitDialog called with:', nodeId, splitResult);
         this.currentSplitNodeId = nodeId;
         this.currentSplitResult = splitResult;
         
@@ -479,7 +458,6 @@ const nodeComponent = {
         
         document.body.appendChild(modal);
         this.currentSplitModal = modal;
-        console.log('Split dialog modal added to DOM');
     },
 
     renderSplitItems: function(splits) {
@@ -516,16 +494,13 @@ const nodeComponent = {
     },
 
     executeSplit: function() {
-        console.log('executeSplit called');
         if (!this.currentSplitNodeId || !this.currentSplitResult) {
-            console.error('Split data is invalid:', this.currentSplitNodeId, this.currentSplitResult);
             this.showError('分割データが不正です');
             return;
         }
 
         // ユーザーが編集した分割データを取得
         const updatedSplits = this.getUpdatedSplitData();
-        console.log('Updated splits data:', updatedSplits);
         
         try {
             // 分割処理中は自動レンダリングを抑制
@@ -544,16 +519,13 @@ const nodeComponent = {
             this.createInternalConnections(newNodeIds, this.currentSplitResult.internal_connections || []);
             
             // 5. 元ノードを削除
-            console.log('Removing original node:', this.currentSplitNodeId);
             this.removeNodeFromMermaidCode(this.currentSplitNodeId);
             
             // 6. 履歴に追加
             const nodeText = this.getNodeText(this.currentSplitNodeId);
-            console.log('Adding to history:', `ノード分割: ${nodeText} → ${updatedSplits.length}個`);
             this.addToHistory(`ノード分割: ${nodeText} → ${updatedSplits.length}個`);
             
             // 7. 自動レンダリング抑制を解除してレンダリング実行
-            console.log('Final Mermaid code before rendering:', this.currentMermaidCode());
             this.suppressAutoRender = false;
             this.renderMermaid();
             
@@ -561,7 +533,6 @@ const nodeComponent = {
             this.showSuccess(`ノードを${updatedSplits.length}個に分割しました`);
             
         } catch (error) {
-            console.error('Split execution error:', error);
             this.suppressAutoRender = false; // エラー時もフラグをリセット
             this.showError('分割実行に失敗しました: ' + error.message);
         }
@@ -590,46 +561,34 @@ const nodeComponent = {
     },
 
     createSplitNodes: function(originalNodeId, splits) {
-        console.log('createSplitNodes called with:', originalNodeId, splits);
-        console.log('typeof splits:', typeof splits, 'Array.isArray:', Array.isArray(splits));
-        console.log('splits details in createSplitNodes:', JSON.stringify(splits, null, 2));
         
         const newNodeIds = [];
         let code = this.currentMermaidCode();
-        console.log('Current Mermaid code before split:', code);
         
         if (!Array.isArray(splits)) {
-            console.error('Splits is not an array:', splits);
             return newNodeIds;
         }
         
         splits.forEach((split, index) => {
-            console.log(`Processing split ${index}:`, split);
             const nodeId = `${originalNodeId}_split_${index + 1}`;
             newNodeIds.push(nodeId);
             
             // ノード定義を追加
             const name = split.title || split.name || `Split ${index + 1}`;
             code += `\n    ${nodeId}[${name}]`;
-            console.log(`Added split node: ${nodeId}[${name}]`);
         });
         
-        console.log('Updated Mermaid code with split nodes:', code);
         this.currentMermaidCode(code);
-        console.log('After updating currentMermaidCode:', this.currentMermaidCode());
-        console.log('New node IDs created:', newNodeIds);
         return newNodeIds;
     },
 
     inheritExternalConnections: function(originalConnections, newNodeIds, splits) {
-        console.log('inheritExternalConnections called with:', originalConnections, newNodeIds, splits);
         let code = this.currentMermaidCode();
         
         // 入力接続の継承 - 最初に入力を受け取るべきノードに接続
         originalConnections.incoming.forEach(sourceNode => {
             const inputReceiver = splits.findIndex(s => s.should_receive_input);
             const targetNodeId = newNodeIds[inputReceiver >= 0 ? inputReceiver : 0];
-            console.log(`Adding input connection: ${sourceNode} --> ${targetNodeId}`);
             code += `\n    ${sourceNode} --> ${targetNodeId}`;
         });
         
@@ -637,40 +596,32 @@ const nodeComponent = {
         originalConnections.outgoing.forEach(targetNode => {
             const outputProvider = splits.findIndex(s => s.should_provide_output);
             const sourceNodeId = newNodeIds[outputProvider >= 0 ? outputProvider : splits.length - 1];
-            console.log(`Adding output connection: ${sourceNodeId} --> ${targetNode}`);
             code += `\n    ${sourceNodeId} --> ${targetNode}`;
         });
         
         this.currentMermaidCode(code);
-        console.log('After inheritExternalConnections currentMermaidCode:', this.currentMermaidCode());
     },
 
     createInternalConnections: function(newNodeIds, connectionSpecs) {
-        console.log('createInternalConnections called with:', newNodeIds, connectionSpecs);
         let code = this.currentMermaidCode();
         
         if (connectionSpecs && connectionSpecs.length > 0) {
             // AIが提案した接続を使用
-            console.log('Using AI suggested connections');
             connectionSpecs.forEach(conn => {
                 if (conn.from_index < newNodeIds.length && conn.to_index < newNodeIds.length) {
                     const fromNode = newNodeIds[conn.from_index];
                     const toNode = newNodeIds[conn.to_index];
                     const arrow = conn.connection_type === 'conditional' ? '-.->': '-->';
-                    console.log(`Adding AI connection: ${fromNode} ${arrow} ${toNode}`);
                     code += `\n    ${fromNode} ${arrow} ${toNode}`;
                 }
             });
         } else {
             // デフォルト: シーケンシャル接続
-            console.log('Using default sequential connections');
             for (let i = 0; i < newNodeIds.length - 1; i++) {
-                console.log(`Adding sequential connection: ${newNodeIds[i]} --> ${newNodeIds[i + 1]}`);
                 code += `\n    ${newNodeIds[i]} --> ${newNodeIds[i + 1]}`;
             }
         }
         
         this.currentMermaidCode(code);
-        console.log('After createInternalConnections currentMermaidCode:', this.currentMermaidCode());
     }
 };
