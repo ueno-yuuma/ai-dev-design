@@ -53,5 +53,25 @@ const apiComponent = {
                     throw new Error('APIからグループ名が返されませんでした。');
                 }
             });
+    },
+
+    analyzeSplitNode: function(nodeText, connections) {
+        const url = '/api/split_node';
+        const options = {
+            method: 'POST',
+            body: JSON.stringify({ 
+                node_text: nodeText,
+                connections: connections || { incoming: [], outgoing: [] }
+            })
+        };
+
+        return this.apiCall(url, options)
+            .then(data => {
+                if (data && typeof data.can_split !== 'undefined') {
+                    return data;
+                } else {
+                    throw new Error('APIからノード分析結果が返されませんでした。');
+                }
+            });
     }
 };

@@ -516,7 +516,7 @@ class Controller_Api extends Controller_Rest
             // Secure HTTP client creation - remove DI injection vulnerability
             $client = $this->create_secure_http_client();
 
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $api_key;
+            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $api_key;
 
             $body = [
                 'contents' => [
@@ -609,6 +609,180 @@ class Controller_Api extends Controller_Rest
             \Log::error('General error in post_generate_name: ' . $e->getMessage());
             return $this->response(['error' => 'An unexpected error occurred. Please try again later.'], 500);
         }
+    }
+
+    /**
+     * POST /api/split_node
+     * AI-powered node splitting analysis
+     */
+    public function post_split_node()
+    {
+        try {
+            $input = Input::json();
+            $node_text = $input['node_text'] ?? '';
+            $node_connections = $input['connections'] ?? ['incoming' => [], 'outgoing' => []];
+            
+            if (empty(trim($node_text))) {
+                return $this->response([
+                    'error' => 'ノードテキストが必要です'
+                ], 400);
+            }
+            
+            // テキスト長制限（トークン制限対策）
+            if (strlen($node_text) > 1000) {
+                return $this->response([
+                    'error' => 'テキストが長すぎます（1000文字以内）'
+                ], 400);
+            }
+            
+            Config::load('google', true);
+            $api_key = Config::get('google.gemini_api_key');
+            
+            if (empty($api_key)) {
+                \Log::error('Gemini API key is not configured for split_node.');
+                return $this->response([
+                    'error' => 'サービス一時停止中'
+                ], 503);
+            }
+            
+            $split_result = $this->analyze_node_splitting($node_text, $node_connections, $api_key);
+            
+            return $this->response($split_result);
+            
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            \Log::error('Guzzle error in post_split_node: ' . $e->getMessage());
+            return $this->response([
+                'error' => 'サービス一時停止中'
+            ], 503);
+        } catch (\Exception $e) {
+            \Log::error('General error in post_split_node: ' . $e->getMessage());
+            return $this->response([
+                'error' => '分析中にエラーが発生しました'
+            ], 500);
+        }
+    }
+
+    /**
+     * Analyze node content for splitting with Gemini API
+     */
+    private function analyze_node_splitting($node_text, $connections, $api_key)
+    {
+        $incoming_text = !empty($connections['incoming']) ? implode(', ', $connections['incoming']) : 'なし';
+        $outgoing_text = !empty($connections['outgoing']) ? implode(', ', $connections['outgoing']) : 'なし';
+        
+        $prompt = "以下のノードを、実行可能な具体的な行程・工程に分割してください。
+
+【分割対象ノード】
+{$node_text}
+
+【既存の接続情報】
+入力接続: {$incoming_text}
+出力接続: {$outgoing_text}
+
+【行程的分割の基準】
+- 実際に実行する具体的な手順・工程に分解
+- 各工程は独立して実行可能
+- 時系列順序で実行される流れ
+- 最小2個、最大5個程度の工程に分割
+
+【接続配分ルール】
+- 入力接続: 最初の工程が受け取る
+- 出力接続: 最後の工程から出力
+- 分割ノード間: 工程の順序で順次接続
+
+【分割例】
+元ノード：「資料作成」
+→ 工程1：「情報収集」
+→ 工程2：「構成検討」  
+→ 工程3：「文書作成」
+→ 工程4：「レビュー・修正」";
+
+        $client = $this->create_secure_http_client();
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $api_key;
+        
+        $body = [
+            'contents' => [
+                ['parts' => [['text' => $prompt]]]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.3,
+                'topK' => 1,
+                'topP' => 1,
+                'responseMimeType' => 'application/json',
+                'responseSchema' => [
+                    'type' => 'OBJECT',
+                    'properties' => [
+                        'can_split' => ['type' => 'BOOLEAN'],
+                        'splits' => [
+                            'type' => 'ARRAY',
+                            'items' => [
+                                'type' => 'OBJECT',
+                                'properties' => [
+                                    'title' => ['type' => 'STRING'],
+                                    'content' => ['type' => 'STRING'],
+                                    'should_receive_input' => ['type' => 'BOOLEAN'],
+                                    'should_provide_output' => ['type' => 'BOOLEAN'],
+                                    'sequence_order' => ['type' => 'INTEGER']
+                                ],
+                                'required' => ['title', 'content', 'sequence_order']
+                            ]
+                        ],
+                        'internal_connections' => [
+                            'type' => 'ARRAY',
+                            'items' => [
+                                'type' => 'OBJECT',
+                                'properties' => [
+                                    'from_index' => ['type' => 'INTEGER'],
+                                    'to_index' => ['type' => 'INTEGER'],
+                                    'connection_type' => ['type' => 'STRING']
+                                ],
+                                'required' => ['from_index', 'to_index', 'connection_type']
+                            ]
+                        ]
+                    ],
+                    'required' => ['can_split']
+                ]
+            ]
+        ];
+        
+        $response = $client->post($url, ['json' => $body]);
+        
+        if ($response->getStatusCode() !== 200) {
+            \Log::error('Gemini API split_node request failed with status: ' . $response->getStatusCode());
+            throw new \Exception('Gemini API request failed');
+        }
+        
+        $result = json_decode($response->getBody(), true);
+        \Log::debug('Gemini API split_node response: ' . json_encode($result));
+        
+        // Check if candidates exist
+        if (!isset($result['candidates'][0])) {
+            \Log::error('Gemini API split_node response did not contain candidates');
+            throw new \Exception('Invalid response from Gemini API');
+        }
+        
+        $candidate = $result['candidates'][0];
+        $finishReason = $candidate['finishReason'] ?? 'UNKNOWN';
+        
+        if ($finishReason !== 'STOP') {
+            \Log::error('Gemini API split_node finished with reason: ' . $finishReason);
+            throw new \Exception('Incomplete response from Gemini API');
+        }
+        
+        $response_text = $candidate['content']['parts'][0]['text'] ?? null;
+        
+        if (empty($response_text)) {
+            \Log::error('Gemini API split_node response did not contain text');
+            throw new \Exception('Empty response from Gemini API');
+        }
+        
+        $response_json = json_decode($response_text, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            \Log::error('Failed to decode JSON from Gemini split_node response. JSON error: ' . json_last_error_msg());
+            throw new \Exception('Invalid JSON response from Gemini API');
+        }
+        
+        return $response_json;
     }
 
     /**

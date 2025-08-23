@@ -221,6 +221,14 @@ function ChartViewModel() {
             self.hideContextMenu();
         }
     };
+    
+    // ノード分割メソッド
+    self.splitSelectedNode = function() {
+        if (self.selectedNodeId()) {
+            nodeComponent.splitNode.call(self, self.selectedNodeId());
+            self.hideContextMenu();
+        }
+    };
 }
 
 // メソッドをプロトタイプにマージ

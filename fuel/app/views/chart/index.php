@@ -186,6 +186,12 @@
                 </svg>
                 種類変更
             </div>
+            <div class="menu-item" data-bind="click: splitSelectedNode">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 4H5a1 1 0 110-2h12l-3-3m4 4a1 1 0 01-1 1H5a1 1 0 010-2h12l-3-3" />
+                </svg>
+                ノード分割
+            </div>
             <div class="menu-item delete" data-bind="click: deleteSelectedNode">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />

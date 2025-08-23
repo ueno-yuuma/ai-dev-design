@@ -277,5 +277,280 @@ const nodeComponent = {
             'output': '出力'
         };
         return typeMap[nodeType] || '処理';
+    },
+
+    splitNode: function(nodeId) {
+        const nodeInfo = this.getNodeInfo(nodeId);
+        if (!nodeInfo) {
+            this.showError('ノード情報が取得できません');
+            return;
+        }
+
+        const connections = this.getNodeConnections(nodeId);
+        
+        this.isLoading(true);
+        
+        apiComponent.analyzeSplitNode(nodeInfo.text, connections)
+            .then(result => {
+                if (result.can_split) {
+                    this.showSplitDialog(nodeId, result);
+                } else {
+                    this.showError('このノードは分割できません');
+                }
+            })
+            .catch(error => {
+                console.error('Node split analysis error:', error);
+                this.showError('分割分析に失敗しました: ' + error.message);
+            })
+            .finally(() => {
+                this.isLoading(false);
+            });
+    },
+
+    getNodeConnections: function(nodeId) {
+        const code = this.currentMermaidCode();
+        const lines = code.split('\n');
+        
+        const incoming = [];
+        const outgoing = [];
+        
+        lines.forEach(line => {
+            const trimmed = line.trim();
+            if (trimmed.includes('-->')) {
+                const match = trimmed.match(/^([^-]+)-->(.+)$/);
+                if (match) {
+                    let source = match[1].trim();
+                    let target = match[2].trim();
+                    
+                    // ノード定義（[ラベル]）を含む場合は、ノードIDのみを抽出
+                    const sourceIdMatch = source.match(/^([^\[(]+)/);
+                    if (sourceIdMatch) source = sourceIdMatch[1].trim();
+                    
+                    const targetIdMatch = target.match(/^([^\[(]+)/);
+                    if (targetIdMatch) target = targetIdMatch[1].trim();
+                    
+                    if (target === nodeId) {
+                        incoming.push(source);
+                    } else if (source === nodeId) {
+                        outgoing.push(target);
+                    }
+                }
+            }
+        });
+        
+        return { incoming, outgoing };
+    },
+
+    showSplitDialog: function(nodeId, splitResult) {
+        this.currentSplitNodeId = nodeId;
+        this.currentSplitResult = splitResult;
+        
+        const modal = document.createElement('div');
+        modal.className = 'modal fade show';
+        modal.style.display = 'block';
+        modal.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h4 class="modal-title">ノード分割プレビュー</h4>
+                        <button type="button" class="close" onclick="nodeComponent.closeSplitDialog()">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="original-node mb-3">
+                            <h5>元のノード</h5>
+                            <div class="alert alert-info">${this.getNodeText(nodeId)}</div>
+                        </div>
+                        
+                        <div class="split-options">
+                            <h5>分割候補 (${splitResult.splits ? splitResult.splits.length : 0}個)</h5>
+                            <div class="split-items" id="split-items-container">
+                                ${this.renderSplitItems(splitResult.splits || [])}
+                            </div>
+                        </div>
+                        
+                        <div class="connections-preview mt-3">
+                            <h6>接続プレビュー</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small><strong>入力接続:</strong> ${this.getNodeConnections(nodeId).incoming.join(', ') || 'なし'}</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small><strong>出力接続:</strong> ${this.getNodeConnections(nodeId).outgoing.join(', ') || 'なし'}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="nodeComponent.closeSplitDialog()">
+                            キャンセル
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="nodeComponent.executeSplit()">
+                            分割実行
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        this.currentSplitModal = modal;
+    },
+
+    renderSplitItems: function(splits) {
+        return splits.map((split, index) => `
+            <div class="split-item mb-2 p-2 border rounded">
+                <div class="form-group mb-1">
+                    <label class="form-label">タイトル:</label>
+                    <input type="text" class="form-control form-control-sm split-title" 
+                           value="${split.title}" data-split-index="${index}">
+                </div>
+                <div class="form-group mb-1">
+                    <label class="form-label">内容:</label>
+                    <textarea class="form-control form-control-sm split-content" rows="2"
+                              data-split-index="${index}">${split.content}</textarea>
+                </div>
+                <div class="split-meta">
+                    <small class="text-muted">
+                        順序: ${split.sequence_order}
+                        ${split.should_receive_input ? ' | 入力受信' : ''}
+                        ${split.should_provide_output ? ' | 出力提供' : ''}
+                    </small>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    closeSplitDialog: function() {
+        if (this.currentSplitModal) {
+            document.body.removeChild(this.currentSplitModal);
+            this.currentSplitModal = null;
+        }
+        this.currentSplitNodeId = null;
+        this.currentSplitResult = null;
+    },
+
+    executeSplit: function() {
+        if (!this.currentSplitNodeId || !this.currentSplitResult) {
+            this.showError('分割データが不正です');
+            return;
+        }
+
+        // ユーザーが編集した分割データを取得
+        const updatedSplits = this.getUpdatedSplitData();
+        
+        try {
+            // 1. 元ノードの接続情報を取得
+            const originalConnections = this.getNodeConnections(this.currentSplitNodeId);
+            
+            // 2. 分割ノードを生成
+            const newNodeIds = this.createSplitNodes(this.currentSplitNodeId, updatedSplits);
+            
+            // 3. 外部接続を継承
+            this.inheritExternalConnections(originalConnections, newNodeIds, updatedSplits);
+            
+            // 4. 分割ノード間の内部接続を生成
+            this.createInternalConnections(newNodeIds, this.currentSplitResult.internal_connections || []);
+            
+            // 5. 元ノードを削除
+            this.removeNodeFromMermaidCode(this.currentSplitNodeId);
+            
+            // 6. 履歴に追加
+            const nodeText = this.getNodeText(this.currentSplitNodeId);
+            this.addToHistory(`ノード分割: ${nodeText} → ${updatedSplits.length}個`);
+            
+            // 7. レンダリング
+            this.renderMermaid();
+            
+            this.closeSplitDialog();
+            this.showSuccess(`ノードを${updatedSplits.length}個に分割しました`);
+            
+        } catch (error) {
+            console.error('Split execution error:', error);
+            this.showError('分割実行に失敗しました: ' + error.message);
+        }
+    },
+
+    getUpdatedSplitData: function() {
+        const splits = [];
+        const splitItems = document.querySelectorAll('#split-items-container .split-item');
+        
+        splitItems.forEach((item, index) => {
+            const titleInput = item.querySelector('.split-title');
+            const contentTextarea = item.querySelector('.split-content');
+            
+            if (titleInput && contentTextarea) {
+                splits.push({
+                    title: titleInput.value.trim(),
+                    content: contentTextarea.value.trim(),
+                    sequence_order: index,
+                    should_receive_input: this.currentSplitResult.splits[index]?.should_receive_input || false,
+                    should_provide_output: this.currentSplitResult.splits[index]?.should_provide_output || false
+                });
+            }
+        });
+        
+        return splits;
+    },
+
+    createSplitNodes: function(originalNodeId, splits) {
+        const newNodeIds = [];
+        let code = this.currentMermaidCode();
+        
+        splits.forEach((split, index) => {
+            const nodeId = `${originalNodeId}_split_${index + 1}`;
+            newNodeIds.push(nodeId);
+            
+            // ノード定義を追加
+            code += `\n    ${nodeId}[${split.title}]`;
+        });
+        
+        this.currentMermaidCode(code);
+        return newNodeIds;
+    },
+
+    inheritExternalConnections: function(originalConnections, newNodeIds, splits) {
+        let code = this.currentMermaidCode();
+        
+        // 入力接続の継承 - 最初に入力を受け取るべきノードに接続
+        originalConnections.incoming.forEach(sourceNode => {
+            const inputReceiver = splits.findIndex(s => s.should_receive_input);
+            const targetNodeId = newNodeIds[inputReceiver >= 0 ? inputReceiver : 0];
+            code += `\n    ${sourceNode} --> ${targetNodeId}`;
+        });
+        
+        // 出力接続の継承 - 最後に出力を提供すべきノードから接続
+        originalConnections.outgoing.forEach(targetNode => {
+            const outputProvider = splits.findIndex(s => s.should_provide_output);
+            const sourceNodeId = newNodeIds[outputProvider >= 0 ? outputProvider : splits.length - 1];
+            code += `\n    ${sourceNodeId} --> ${targetNode}`;
+        });
+        
+        this.currentMermaidCode(code);
+    },
+
+    createInternalConnections: function(newNodeIds, connectionSpecs) {
+        let code = this.currentMermaidCode();
+        
+        if (connectionSpecs && connectionSpecs.length > 0) {
+            // AIが提案した接続を使用
+            connectionSpecs.forEach(conn => {
+                if (conn.from_index < newNodeIds.length && conn.to_index < newNodeIds.length) {
+                    const fromNode = newNodeIds[conn.from_index];
+                    const toNode = newNodeIds[conn.to_index];
+                    const arrow = conn.connection_type === 'conditional' ? '-.->': '-->';
+                    code += `\n    ${fromNode} ${arrow} ${toNode}`;
+                }
+            });
+        } else {
+            // デフォルト: シーケンシャル接続
+            for (let i = 0; i < newNodeIds.length - 1; i++) {
+                code += `\n    ${newNodeIds[i]} --> ${newNodeIds[i + 1]}`;
+            }
+        }
+        
+        this.currentMermaidCode(code);
     }
 };
