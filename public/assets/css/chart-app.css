@@ -750,3 +750,122 @@ body {
         font-size: 13px;
     }
 }
+
+/* ノード分割プレビューダイアログのスタイル */
+.split-preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1050;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.split-preview-modal .modal-dialog {
+    width: 90%;
+    max-width: 800px;
+    margin: 0;
+}
+
+.split-preview-modal .modal-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+.split-item {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.split-item:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.split-item .form-label {
+    font-weight: 600;
+    font-size: 12px;
+    color: #495057;
+    margin-bottom: 4px;
+}
+
+.split-item .split-title {
+    font-weight: 500;
+    color: #212529;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 14px;
+}
+
+.split-item .split-content {
+    color: #495057;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 50px;
+}
+
+.split-item .split-title:focus,
+.split-item .split-content:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    outline: 0;
+}
+
+.split-meta {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #dee2e6;
+}
+
+.split-meta .text-muted {
+    font-size: 11px;
+    color: #6c757d;
+}
+
+.connections-preview {
+    background: #f1f3f4;
+    border: 1px solid #dadce0;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.connections-preview h6 {
+    margin-bottom: 8px;
+    color: #3c4043;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.connections-preview small {
+    color: #5f6368;
+    font-size: 12px;
+}
+
+.connections-preview .row {
+    margin: 0;
+}
+
+.connections-preview .col-md-6 {
+    padding: 4px 8px;
+}
+
+/* 分割アイコンのスタイル調整 */
+.menu-item svg[viewBox="0 0 24 24"] {
+    width: 16px;
+    height: 16px;
+}

@@ -219,30 +219,52 @@ const nodeComponent = {
     },
     removeNodeFromMermaidCode: function(nodeId) {
         let code = this.currentMermaidCode();
+        const lines = code.split('\n');
+        const resultLines = [];
 
-        const nodePatterns = [
-            new RegExp(`\\s*${nodeId}\\[[^\\]]+\\]`, 'g'),
-            new RegExp(`\\s*${nodeId}\\([^\\)]+\\)`, 'g'),
-            new RegExp(`\\s*${nodeId}\\{[^\\}]+\\}`, 'g'),
-            new RegExp(`\\s*${nodeId}\\[\\[[^\\]]+\\]\\]`, 'g')
-        ];
+        // 正確なnode IDのエスケープ
+        const escapedNodeId = nodeId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            let shouldSkip = false;
+            
+            // ノード定義行をスキップ
+            const nodeDefPatterns = [
+                new RegExp(`^\\s*${escapedNodeId}\\[[^\\]]+\\]\\s*$`),
+                new RegExp(`^\\s*${escapedNodeId}\\([^\\)]+\\)\\s*$`),
+                new RegExp(`^\\s*${escapedNodeId}\\{[^\\}]+\\}\\s*$`),
+                new RegExp(`^\\s*${escapedNodeId}\\[\\[[^\\]]+\\]\\]\\s*$`)
+            ];
+            
+            for (const pattern of nodeDefPatterns) {
+                if (pattern.test(line)) {
+                    shouldSkip = true;
+                    break;
+                }
+            }
+            
+            // 接続行をスキップ（該当ノードを含む行）
+            if (!shouldSkip && trimmedLine.includes('-->')) {
+                const connectionPatterns = [
+                    new RegExp(`\\b${escapedNodeId}\\s*-->`),
+                    new RegExp(`-->\\s*${escapedNodeId}\\b`)
+                ];
+                
+                for (const pattern of connectionPatterns) {
+                    if (pattern.test(trimmedLine)) {
+                        shouldSkip = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!shouldSkip) {
+                resultLines.push(line);
+            }
+        }
 
-        nodePatterns.forEach(pattern => {
-            code = code.replace(pattern, '');
-        });
-
-        const connectionPatterns = [
-            new RegExp(`\\s*[A-Za-z0-9_]+\\s*-->\\s*${nodeId}`, 'g'),
-            new RegExp(`\\s*${nodeId}\\s*-->\\s*[A-Za-z0-9_]+`, 'g'),
-            new RegExp(`\\s*[A-Za-z0-9_]+\\s*->>\\s*${nodeId}`, 'g'),
-            new RegExp(`\\s*${nodeId}\\s*->>\\s*[A-Za-z0-9_]+`, 'g')
-        ];
-
-        connectionPatterns.forEach(pattern => {
-            code = code.replace(pattern, '');
-        });
-
-        this.currentMermaidCode(code);
+        this.currentMermaidCode(resultLines.join('\n'));
     },
     updateNode: function() {
         this.editNode();
@@ -277,5 +299,39 @@ const nodeComponent = {
             'output': '出力'
         };
         return typeMap[nodeType] || '処理';
+    },
+    
+    getNodeConnections: function(nodeId) {
+        const code = this.currentMermaidCode();
+        const lines = code.split('\n');
+        
+        const incoming = [];
+        const outgoing = [];
+        
+        lines.forEach(line => {
+            const trimmed = line.trim();
+            if (trimmed.includes('-->')) {
+                const match = trimmed.match(/^([^-]+)-->(.+)$/);
+                if (match) {
+                    let source = match[1].trim();
+                    let target = match[2].trim();
+                    
+                    // ノード定義（[ラベル]）を含む場合は、ノードIDのみを抽出
+                    const sourceIdMatch = source.match(/^([^\[(]+)/);
+                    if (sourceIdMatch) source = sourceIdMatch[1].trim();
+                    
+                    const targetIdMatch = target.match(/^([^\[(]+)/);
+                    if (targetIdMatch) target = targetIdMatch[1].trim();
+                    
+                    if (target === nodeId) {
+                        incoming.push(source);
+                    } else if (source === nodeId) {
+                        outgoing.push(target);
+                    }
+                }
+            }
+        });
+        
+        return { incoming, outgoing };
     }
 };

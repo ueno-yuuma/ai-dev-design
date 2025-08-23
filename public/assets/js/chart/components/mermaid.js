@@ -41,7 +41,7 @@ const mermaidComponent = {
                     this.isRendering(false); // エラー時もフラグをリセット
                 });
         } catch (error) {
-            console.error('renderMermaid例外:', error);
+            console.error('Mermaidレンダリング例外:', error);
             this.mermaidHtml('<div class="text-danger text-center p-5">フローチャートの構文にエラーがあります</div>');
             this.isRendering(false); // 例外時もフラグをリセット
         }

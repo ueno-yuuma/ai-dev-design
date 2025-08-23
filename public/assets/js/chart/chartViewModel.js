@@ -221,6 +221,14 @@ function ChartViewModel() {
             self.hideContextMenu();
         }
     };
+    
+    // ノード分割メソッド
+    self.splitSelectedNode = function() {
+        if (self.selectedNodeId()) {
+            nodeSplitComponent.splitNode.call(self, self.selectedNodeId());
+            self.hideContextMenu();
+        }
+    };
 }
 
 // メソッドをプロトタイプにマージ
@@ -233,6 +241,7 @@ Object.assign(ChartViewModel.prototype, importExportComponent);
 Object.assign(ChartViewModel.prototype, inlineEditComponent);
 Object.assign(ChartViewModel.prototype, mermaidComponent);
 Object.assign(ChartViewModel.prototype, nodeComponent);
+Object.assign(ChartViewModel.prototype, nodeSplitComponent);
 Object.assign(ChartViewModel.prototype, selectionComponent);
 Object.assign(ChartViewModel.prototype, uiComponent);
 Object.assign(ChartViewModel.prototype, zoomComponent);
