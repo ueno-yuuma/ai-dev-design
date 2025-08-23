@@ -51,7 +51,7 @@ class Controller_Api extends Controller_Rest
             return;
         }
         
-        $user_data = $this->get_session_data($session_id);
+        $user_data = Model_Session::get_session($session_id);
         
         if (!$user_data) {
             Cookie::delete('auth_session', '/');
@@ -66,7 +66,7 @@ class Controller_Api extends Controller_Rest
             $this->current_user = Model_User::find($user_data['user_id']);
             
             if (!$this->current_user) {
-                $this->destroy_session($session_id);
+                Model_Session::destroy_session($session_id);
                 Cookie::delete('auth_session', '/');
                 $this->response(array(
                     'error' => 'User not found. Please login again.'
@@ -306,7 +306,7 @@ class Controller_Api extends Controller_Rest
             );
             
             // Create secure session
-            $session_id = $this->create_secure_session($user->id, $user_data);
+            $session_id = Model_Session::create_session($user->id, $user_data);
             
             // Set HttpOnly cookie (FuelPHP syntax)
             Cookie::set('auth_session', $session_id, time() + (24 * 60 * 60), '/', null, false, true);
@@ -337,7 +337,7 @@ class Controller_Api extends Controller_Rest
         $session_id = Cookie::get('auth_session');
         
         if ($session_id) {
-            $this->destroy_session($session_id);
+            Model_Session::destroy_session($session_id);
         }
         
         Cookie::delete('auth_session', '/');
@@ -362,7 +362,7 @@ class Controller_Api extends Controller_Rest
             ));
         }
         
-        $user_data = $this->get_session_data($session_id);
+        $user_data = Model_Session::get_session($session_id);
         
         if (!$user_data) {
             Cookie::delete('auth_session', '/');
@@ -407,207 +407,34 @@ class Controller_Api extends Controller_Rest
     }
     
     /**
-     * Create secure session
-     */
-    private function create_secure_session($user_id, $user_data)
-    {
-        $session_id = bin2hex(random_bytes(32));
-        
-        // Store session in database or cache (using simple file storage for now)
-        $session_data = array(
-            'user_id' => $user_id,
-            'email' => $user_data['email'],
-            'name' => $user_data['name'],
-            'created_at' => time(),
-            'expires_at' => time() + (24 * 60 * 60)
-        );
-        
-        $session_file = APPPATH . 'tmp/sessions/' . $session_id;
-        
-        // Create sessions directory if it doesn't exist
-        if (!is_dir(dirname($session_file))) {
-            mkdir(dirname($session_file), 0700, true);
-        }
-        
-        file_put_contents($session_file, json_encode($session_data));
-        
-        return $session_id;
-    }
-    
-    /**
-     * Get session data
-     */
-    private function get_session_data($session_id)
-    {
-        if (!preg_match('/^[a-f0-9]{64}$/', $session_id)) {
-            return false;
-        }
-        
-        $session_file = APPPATH . 'tmp/sessions/' . $session_id;
-        
-        if (!file_exists($session_file)) {
-            return false;
-        }
-        
-        $session_data = json_decode(file_get_contents($session_file), true);
-        
-        if (!$session_data || $session_data['expires_at'] < time()) {
-            $this->destroy_session($session_id);
-            return false;
-        }
-        
-        return $session_data;
-    }
-    
-    /**
-     * Destroy session
-     */
-    private function destroy_session($session_id)
-    {
-        if (!preg_match('/^[a-f0-9]{64}$/', $session_id)) {
-            return;
-        }
-        
-        $session_file = APPPATH . 'tmp/sessions/' . $session_id;
-        
-        if (file_exists($session_file)) {
-            unlink($session_file);
-        }
-    }
-
-    /**
-     *
      * POST /api/generate_name
      * Generate a group name using Gemini API
      */
     public function post_generate_name()
     {
         try {
-            // The router method already ensures the user is authenticated.
             $node_labels = Input::json('node_labels');
 
             if (empty($node_labels) || !is_array($node_labels)) {
                 return $this->response(['error' => 'Invalid input. "node_labels" is required as a non-empty array.'], 400);
             }
 
-            // Input validation: limit array size and sanitize content
             if (count($node_labels) > 10) {
                 return $this->response(['error' => 'Too many node labels. Maximum 10 allowed.'], 400);
             }
 
-            // Sanitize node labels
-            $sanitized_labels = array_map(function($label) {
-                return substr(trim(strip_tags($label)), 0, 100);
-            }, $node_labels);
+            $gemini_service = new Service_Gemini();
+            $group_name = $gemini_service->generate_group_name($node_labels);
 
-            Config::load('google', true);
-            $api_key = Config::get('google.gemini_api_key');
-
-            if (empty($api_key)) {
-                \Log::error('Gemini API key is not configured.');
-                return $this->response(['error' => 'Service temporarily unavailable.'], 503);
-            }
-
-            $prompt_text = "以下の要素をグループ化するのに最もふさわしい、簡潔な名前を1つだけ提案してください。
-
-要素リスト：
-- " . implode("\n- ", $sanitized_labels);
-
-            // Secure HTTP client creation - remove DI injection vulnerability
-            $client = $this->create_secure_http_client();
-
-            $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $api_key;
-
-            $body = [
-                'contents' => [
-                    [
-                        'parts' => [
-                            ['text' => $prompt_text]
-                        ]
-                    ]
-                ],
-                'generationConfig' => [
-                    'temperature' => 0.5,
-                    'topK' => 1,
-                    'topP' => 1,
-                    'responseMimeType' => 'application/json',
-                    'responseSchema' => [
-                        'type' => 'OBJECT',
-                        'properties' => [
-                            'group_name' => ['type' => 'STRING']
-                        ],
-                        'required' => ['group_name']
-                    ]
-                ]
-            ];
-
-            $response = $client->post($url, ['json' => $body]);
-
-            if ($response->getStatusCode() !== 200) {
-                \Log::error('Gemini API request failed with status: ' . $response->getStatusCode());
-                return $this->response(['error' => 'Service temporarily unavailable.'], 503);
-            }
-
-            $result = json_decode($response->getBody(), true);
-            \Log::debug('Gemini API full response: ' . json_encode($result));
-            
-            // Check if candidates exist
-            if (!isset($result['candidates'][0])) {
-                \Log::error('Gemini API response did not contain candidates. Response: ' . json_encode($result));
-                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
-            }
-            
-            $candidate = $result['candidates'][0];
-            $finishReason = $candidate['finishReason'] ?? 'UNKNOWN';
-            
-            // Handle different finish reasons
-            if ($finishReason === 'MAX_TOKENS') {
-                \Log::error('Gemini API response truncated due to MAX_TOKENS');
-                return $this->response(['error' => 'Response was too long. Please try with fewer items.'], 503);
-            }
-            
-            if ($finishReason !== 'STOP') {
-                \Log::error('Gemini API finished with reason: ' . $finishReason);
-                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
-            }
-            
-            $responseText = $candidate['content']['parts'][0]['text'] ?? null;
-
-            if (empty($responseText)) {
-                \Log::error('Gemini API response did not contain text. Response structure: ' . json_encode($result));
-                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
-            }
-
-            $responseJson = json_decode($responseText, true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                \Log::error('Failed to decode JSON from Gemini response. JSON error: ' . json_last_error_msg());
-                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
-            }
-
-            $generated_text = $responseJson['group_name'] ?? null;
-
-            if (empty($generated_text)) {
-                \Log::error('Parsed JSON from Gemini did not contain group_name.');
-                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
-            }
-            
-            // Additional sanitization for the generated name
-            $clean_name = trim($generated_text, " *\t\n\r\0\x0B\"'");
-            $clean_name = substr($clean_name, 0, 50); // Limit length
-            
-            if (empty($clean_name)) {
-                \Log::error('Generated group name is empty after sanitization.');
-                return $this->response(['error' => 'Unable to generate group name. Please try again.'], 503);
-            }
-
-            return $this->response(['group_name' => $clean_name], 200);
+            return $this->response(['group_name' => $group_name], 200);
 
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             \Log::error('Guzzle error in post_generate_name: ' . $e->getMessage());
             return $this->response(['error' => 'Service temporarily unavailable.'], 503);
         } catch (\Exception $e) {
             \Log::error('General error in post_generate_name: ' . $e->getMessage());
-            return $this->response(['error' => 'An unexpected error occurred. Please try again later.'], 500);
+            $error_code = $e->getCode() ?: 500;
+            return $this->response(['error' => $e->getMessage()], $error_code);
         }
     }
 
@@ -621,198 +448,26 @@ class Controller_Api extends Controller_Rest
             $input = Input::json();
             $node_text = $input['node_text'] ?? '';
             $node_connections = $input['connections'] ?? ['incoming' => [], 'outgoing' => []];
-            
+
             if (empty(trim($node_text))) {
-                return $this->response([
-                    'error' => 'ノードテキストが必要です'
-                ], 400);
+                return $this->response(['error' => 'ノードテキストが必要です'], 400);
             }
-            
-            // テキスト長制限（トークン制限対策）
             if (strlen($node_text) > 1000) {
-                return $this->response([
-                    'error' => 'テキストが長すぎます（1000文字以内）'
-                ], 400);
+                return $this->response(['error' => 'テキストが長すぎます（1000文字以内）'], 400);
             }
-            
-            Config::load('google', true);
-            $api_key = Config::get('google.gemini_api_key');
-            
-            if (empty($api_key)) {
-                \Log::error('Gemini API key is not configured for split_node.');
-                return $this->response([
-                    'error' => 'サービス一時停止中'
-                ], 503);
-            }
-            
-            $split_result = $this->analyze_node_splitting($node_text, $node_connections, $api_key);
-            
+
+            $gemini_service = new Service_Gemini();
+            $split_result = $gemini_service->analyze_node_for_splitting($node_text, $node_connections);
+
             return $this->response($split_result);
-            
+
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             \Log::error('Guzzle error in post_split_node: ' . $e->getMessage());
-            return $this->response([
-                'error' => 'サービス一時停止中'
-            ], 503);
+            return $this->response(['error' => 'サービス一時停止中'], 503);
         } catch (\Exception $e) {
             \Log::error('General error in post_split_node: ' . $e->getMessage());
-            return $this->response([
-                'error' => '分析中にエラーが発生しました'
-            ], 500);
+             $error_code = $e->getCode() ?: 500;
+            return $this->response(['error' => $e->getMessage()], $error_code);
         }
-    }
-
-    /**
-     * Analyze node content for splitting with Gemini API
-     */
-    private function analyze_node_splitting($node_text, $connections, $api_key)
-    {
-        $incoming_text = !empty($connections['incoming']) ? implode(', ', $connections['incoming']) : 'なし';
-        $outgoing_text = !empty($connections['outgoing']) ? implode(', ', $connections['outgoing']) : 'なし';
-        
-        $prompt = "以下のノードを、実行可能な具体的な行程・工程に分割してください。
-
-【分割対象ノード】
-{$node_text}
-
-【既存の接続情報】
-入力接続: {$incoming_text}
-出力接続: {$outgoing_text}
-
-【行程的分割の基準】
-- 実際に実行する具体的な手順・工程に分解
-- 各工程は独立して実行可能
-- 時系列順序で実行される流れ
-- 最小2個、最大5個程度の工程に分割
-
-【接続配分ルール】
-- 入力接続: 最初の工程が受け取る
-- 出力接続: 最後の工程から出力
-- 分割ノード間: 工程の順序で順次接続
-
-【分割例】
-元ノード：「資料作成」
-→ 工程1：「情報収集」
-→ 工程2：「構成検討」  
-→ 工程3：「文書作成」
-→ 工程4：「レビュー・修正」
-
-レスポンス例：
-{
-  \"can_split\": true,
-  \"splits\": [
-    {\"name\": \"情報収集\", \"sequence_order\": 1, \"should_receive_input\": true},
-    {\"name\": \"構成検討\", \"sequence_order\": 2},
-    {\"name\": \"文書作成\", \"sequence_order\": 3},
-    {\"name\": \"レビュー・修正\", \"sequence_order\": 4, \"should_provide_output\": true}
-  ]
-}";
-
-        $client = $this->create_secure_http_client();
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' . $api_key;
-        
-        $body = [
-            'contents' => [
-                ['parts' => [['text' => $prompt]]]
-            ],
-            'generationConfig' => [
-                'temperature' => 0.3,
-                'topK' => 1,
-                'topP' => 1,
-                'responseMimeType' => 'application/json',
-                'responseSchema' => [
-                    'type' => 'OBJECT',
-                    'properties' => [
-                        'can_split' => ['type' => 'BOOLEAN'],
-                        'splits' => [
-                            'type' => 'ARRAY',
-                            'items' => [
-                                'type' => 'OBJECT',
-                                'properties' => [
-                                    'name' => ['type' => 'STRING'],
-                                    'should_receive_input' => ['type' => 'BOOLEAN'],
-                                    'should_provide_output' => ['type' => 'BOOLEAN'],
-                                    'sequence_order' => ['type' => 'INTEGER']
-                                ],
-                                'required' => ['name', 'sequence_order']
-                            ]
-                        ],
-                        'internal_connections' => [
-                            'type' => 'ARRAY',
-                            'items' => [
-                                'type' => 'OBJECT',
-                                'properties' => [
-                                    'from_index' => ['type' => 'INTEGER'],
-                                    'to_index' => ['type' => 'INTEGER'],
-                                    'connection_type' => ['type' => 'STRING']
-                                ],
-                                'required' => ['from_index', 'to_index', 'connection_type']
-                            ]
-                        ]
-                    ],
-                    'required' => ['can_split']
-                ]
-            ]
-        ];
-        
-        $response = $client->post($url, ['json' => $body]);
-        
-        if ($response->getStatusCode() !== 200) {
-            \Log::error('Gemini API split_node request failed with status: ' . $response->getStatusCode());
-            throw new \Exception('Gemini API request failed');
-        }
-        
-        $result = json_decode($response->getBody(), true);
-        \Log::debug('Gemini API split_node response: ' . json_encode($result));
-        
-        // Check if candidates exist
-        if (!isset($result['candidates'][0])) {
-            \Log::error('Gemini API split_node response did not contain candidates');
-            throw new \Exception('Invalid response from Gemini API');
-        }
-        
-        $candidate = $result['candidates'][0];
-        $finishReason = $candidate['finishReason'] ?? 'UNKNOWN';
-        
-        if ($finishReason !== 'STOP') {
-            \Log::error('Gemini API split_node finished with reason: ' . $finishReason);
-            throw new \Exception('Incomplete response from Gemini API');
-        }
-        
-        $response_text = $candidate['content']['parts'][0]['text'] ?? null;
-        
-        if (empty($response_text)) {
-            \Log::error('Gemini API split_node response did not contain text');
-            throw new \Exception('Empty response from Gemini API');
-        }
-        
-        $response_json = json_decode($response_text, true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            \Log::error('Failed to decode JSON from Gemini split_node response. JSON error: ' . json_last_error_msg());
-            throw new \Exception('Invalid JSON response from Gemini API');
-        }
-        
-        return $response_json;
-    }
-
-    /**
-     * Create a secure HTTP client with proper configuration
-     */
-    private function create_secure_http_client()
-    {
-        // Only allow in test environment for mocking
-        if (defined('PHPUNIT_RUNNING') && isset($this->http_client)) {
-            return $this->http_client;
-        }
-
-        // Production: always create a new, secure client
-        return new \GuzzleHttp\Client([
-            'timeout' => 30.0,
-            'verify' => true, // SSL verification
-            'http_errors' => false, // Don't throw exceptions on HTTP errors
-            'headers' => [
-                'User-Agent' => 'AI-Dev-Design/1.0'
-            ]
-        ]);
     }
 }
