@@ -118,24 +118,22 @@ const selectionComponent = {
             return;
         }
 
-        if (confirm(`選択された${selectedCount}個のノードを削除しますか？`)) {
-            if (selectedCount > 1) {
-                this.suppressAutoRender = true;
-            }
-
-            this.selectedNodes().forEach(nodeId => {
-                this.removeNodeFromMermaidCode(nodeId);
-            });
-
-            if (selectedCount > 1) {
-                this.suppressAutoRender = false;
-                this.renderMermaid();
-            }
-
-            this.clearMultiSelection();
-            this.addToHistory(`複数ノード削除: ${selectedCount}個`);
-            this.showSuccess(`${selectedCount}個のノードを削除しました`);
+        if (selectedCount > 1) {
+            this.suppressAutoRender = true;
         }
+
+        this.selectedNodes().forEach(nodeId => {
+            this.removeNodeFromMermaidCode(nodeId);
+        });
+
+        if (selectedCount > 1) {
+            this.suppressAutoRender = false;
+            this.renderMermaid();
+        }
+
+        this.clearMultiSelection();
+        this.addToHistory(`複数ノード削除: ${selectedCount}個`);
+        this.showSuccess(`${selectedCount}個のノードを削除しました`);
     },
     selectAllNodes: function() {
         const mermaidContainer = document.querySelector('#mermaid-display .mermaid-container');
