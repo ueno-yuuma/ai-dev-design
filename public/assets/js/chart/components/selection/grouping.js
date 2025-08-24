@@ -52,7 +52,7 @@ const groupingComponent = {
         // 設定に応じて処理を分岐
         if (this.settings.autoGenerateGroupName()) {
             // --- 自動生成ロジック ---
-            this.isLoading(true);
+            this.showLoading('グループ名を生成中...');
             
             // 選択ノードのラベルを抽出
             const content = this.extractSelectedNodeContent(this.currentMermaidCode().split('\n'), this.selectedNodes());
@@ -67,7 +67,7 @@ const groupingComponent = {
 
             if (nodeLabels.length === 0) {
                 this.showError('グループ化するノードのテキストが取得できませんでした。');
-                this.isLoading(false);
+                this.hideLoading();
                 return;
             }
 
@@ -82,7 +82,7 @@ const groupingComponent = {
                     self.showError(`グループ名の自動生成に失敗しました: ${error.message}`);
                 })
                 .finally(function() {
-                    self.isLoading(false);
+                    self.hideLoading();
                 });
 
         } else {
