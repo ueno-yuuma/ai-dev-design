@@ -87,8 +87,7 @@ function ChartViewModel() {
         { value: 'output', label: '出力' }
     ]);
 
-    // UI状態
-    self.isLoading = ko.observable(false);
+    // UI状態（isLoadingは上で定義済み）
     self.errorMessage = ko.observable('');
     self.successMessage = ko.observable('');
 
@@ -135,7 +134,8 @@ function ChartViewModel() {
 
     // デバウンス機能
     self.lastActionTime = 0;
-    self.actionDebounceDelay = 300; // 300ms
+    self.actionDebounceDelay = (typeof APP_CONSTANTS !== 'undefined') ? 
+        APP_CONSTANTS.DEBOUNCE.ACTION_DELAY : 300; // フォールバック値
 
     // 操作履歴（Undo/Redo）
     self.history = [];
@@ -178,6 +178,25 @@ function ChartViewModel() {
     };
 
     // 初期化
+    // 認証成功後の処理を統合（非同期）
+    self.handlePostAuthSuccess = async function() {
+        // 認証状態の確認
+        if (!self.isAuthenticated()) {
+            console.warn('handlePostAuthSuccess called but not authenticated');
+            return;
+        }
+        
+        try {
+            // チャートをロードしてから新規チャートを作成
+            await self.loadCharts();
+            // ローディング完了後に新規チャート作成
+            self.createNewChart({ ignoreStateCheck: true });
+        } catch (error) {
+            console.error('Post-auth processing failed:', error);
+            self.showError('初期化に失敗しました');
+        }
+    };
+
     self.initialize = function() {
         initializeMermaid();
         self.checkAuthStatus();
@@ -195,17 +214,46 @@ function ChartViewModel() {
         self.loadSettings();
     };
 
-    // メッセージ表示
+    // メッセージ表示（自動消去タイマー管理）
+    self.messageTimer = null;
+    
     self.showError = function(message) {
         self.errorMessage(message);
         self.successMessage('');
-        setTimeout(() => self.errorMessage(''), 5000);
+        const timeout = (typeof APP_CONSTANTS !== 'undefined') ? 
+            APP_CONSTANTS.MESSAGE_TIMEOUTS.ERROR : 5000;
+        self._scheduleMessageClear('error', timeout);
     };
 
     self.showSuccess = function(message) {
         self.successMessage(message);
         self.errorMessage('');
-        setTimeout(() => self.successMessage(''), 3000);
+        const timeout = (typeof APP_CONSTANTS !== 'undefined') ? 
+            APP_CONSTANTS.MESSAGE_TIMEOUTS.SUCCESS : 3000;
+        self._scheduleMessageClear('success', timeout);
+    };
+    
+    self._scheduleMessageClear = function(type, delay) {
+        if (self.messageTimer) {
+            clearTimeout(self.messageTimer);
+        }
+        self.messageTimer = setTimeout(() => {
+            if (type === 'error') {
+                self.errorMessage('');
+            } else {
+                self.successMessage('');
+            }
+            self.messageTimer = null;
+        }, delay);
+    };
+    
+    self.clearMessage = function() {
+        if (self.messageTimer) {
+            clearTimeout(self.messageTimer);
+            self.messageTimer = null;
+        }
+        self.errorMessage('');
+        self.successMessage('');
     };
 
     // Mermaidコード変更時の自動レンダリング
