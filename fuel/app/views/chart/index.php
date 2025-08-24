@@ -27,6 +27,14 @@
     <script src="https://accounts.google.com/gsi/client" onload="window.googleScriptLoaded && window.googleScriptLoaded()"></script>
 </head>
 <body>
+    <!-- ローディングオーバーレイ -->
+    <div class="loading-overlay" data-bind="visible: isLoading">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-message" data-bind="text: loadingMessage"></div>
+        </div>
+    </div>
+
     <!-- 認証が必要な場合の表示 -->
     <div id="auth-required" class="auth-container" data-bind="visible: !isAuthenticated()">
         <div class="auth-box">
@@ -403,6 +411,7 @@
     <script src="/assets/js/chart/utils.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/api.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/auth.js?v=<?php echo time(); ?>"></script>
+    <script src="/assets/js/chart/components/loading.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/chart.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/dnd.js?v=<?php echo time(); ?>"></script>
     <script src="/assets/js/chart/components/history.js?v=<?php echo time(); ?>"></script>

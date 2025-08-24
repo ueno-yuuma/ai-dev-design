@@ -1,6 +1,9 @@
 const authComponent = {
     checkAuthStatus: function() {
         const self = this;
+        // ローディング開始
+        self.showLoading('認証状態を確認中...');
+
         // Check authentication status from server
         fetch(API_ENDPOINTS.authStatus, {
             method: 'GET',
@@ -33,6 +36,10 @@ const authComponent = {
             self.userName('');
             self.userEmail('');
             currentUser = null;
+        })
+        .finally(() => {
+            // ローディング終了
+            self.hideLoading();
         });
     },
     logout: function() {

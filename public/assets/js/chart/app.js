@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Google Identity Services コールバック
     window.handleCredentialResponse = function(response) {
+        // ローディング開始
+        viewModel.showLoading('ログイン中...');
+
         // Send credential to server for verification
         fetch(API_ENDPOINTS.login, {
             method: 'POST',
@@ -37,11 +40,18 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => {
             console.error('Login error:', error);
             viewModel.showError('ログインに失敗しました');
+        })
+        .finally(() => {
+            // ローディング終了
+            viewModel.hideLoading();
         });
     };
 
     // サインアウト
     window.signOut = function() {
+        // ローディング開始
+        viewModel.showLoading('ログアウト中...');
+
         fetch(API_ENDPOINTS.logout, {
             method: 'POST',
             credentials: 'include'
@@ -81,6 +91,10 @@ document.addEventListener('DOMContentLoaded', function() {
             viewModel.currentChart(null);
 
             setTimeout(() => location.reload(), 1000);
+        })
+        .finally(() => {
+            // ローディング終了
+            viewModel.hideLoading();
         });
     };
 
