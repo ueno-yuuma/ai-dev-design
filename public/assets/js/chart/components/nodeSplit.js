@@ -8,7 +8,7 @@ const nodeSplitComponent = {
 
         const connections = this.getNodeConnections(nodeId);
         
-        this.isLoading(true);
+        this.showLoading('ノードを分析中...');
         
         apiComponent.analyzeSplitNode(nodeInfo.text, connections)
             .then(result => {
@@ -22,7 +22,7 @@ const nodeSplitComponent = {
                 this.showError('分割分析に失敗しました: ' + error.message);
             })
             .finally(() => {
-                this.isLoading(false);
+                this.hideLoading();
             });
     },
 

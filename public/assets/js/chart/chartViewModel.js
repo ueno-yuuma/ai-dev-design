@@ -47,6 +47,21 @@ function ChartViewModel() {
     self.userName = ko.observable('');
     self.userEmail = ko.observable('');
 
+    // ローディング関連
+    self.isLoading = ko.observable(false);
+    self.loadingMessage = ko.observable('読み込み中...');
+
+    // ローディング表示の制御
+    self.showLoading = function(message = '読み込み中...') {
+        self.loadingMessage(message);
+        self.isLoading(true);
+    };
+
+    self.hideLoading = function() {
+        self.isLoading(false);
+        self.loadingMessage('読み込み中...');
+    };
+
     // チャート関連
     self.currentChart = ko.observable(null);
     self.currentChartTitle = ko.observable('');
