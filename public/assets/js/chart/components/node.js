@@ -135,14 +135,12 @@ const nodeComponent = {
             return;
         }
 
-        if (confirm(`ノード「${this.getNodeText(this.selectedNodeId())}」を削除しますか？`)) {
-            const nodeText = this.getNodeText(this.selectedNodeId());
-            this.removeNodeFromMermaidCode(this.selectedNodeId());
-            this.addToHistory(`ノード削除: ${nodeText}`);
-            this.hideContextMenu();
-            this.clearNodeSelection();
-            this.showSuccess('ノードを削除しました');
-        }
+        const nodeText = this.getNodeText(this.selectedNodeId());
+        this.removeNodeFromMermaidCode(this.selectedNodeId());
+        this.addToHistory(`ノード削除: ${nodeText}`);
+        this.hideContextMenu();
+        this.clearNodeSelection();
+        this.showSuccess('ノードを削除しました');
     },
     getNodeText: function(nodeId) {
         const code = this.currentMermaidCode();

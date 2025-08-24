@@ -18,11 +18,8 @@ const authComponent = {
                 currentUser = data.user;
 
                 // Load charts after authentication confirmed
-                setTimeout(() => {
-                    self.loadCharts();
-                    // Automatically create a new chart after login
-                    self.createNewChart();
-                }, 100);
+                // 認証成功後の処理を実行
+                self.handlePostAuthSuccess();
             } else {
                 self.isAuthenticated(false);
                 self.userName('');
@@ -62,7 +59,9 @@ const authComponent = {
                 this.currentChart(null);
                 this.showSuccess('ログアウトしました');
 
-                setTimeout(() => location.reload(), 1000);
+                const reloadDelay = (typeof APP_CONSTANTS !== 'undefined') ? 
+                    APP_CONSTANTS.DELAYS.RELOAD_DELAY : 1000;
+                setTimeout(() => location.reload(), reloadDelay);
             })
             .catch(() => {
                 // Even if server logout fails, clear client state
@@ -75,7 +74,9 @@ const authComponent = {
                 this.savedCharts([]);
                 this.currentChart(null);
 
-                setTimeout(() => location.reload(), 1000);
+                const reloadDelay = (typeof APP_CONSTANTS !== 'undefined') ? 
+                    APP_CONSTANTS.DELAYS.RELOAD_DELAY : 1000;
+                setTimeout(() => location.reload(), reloadDelay);
             });
         }
     }

@@ -1,3 +1,18 @@
+// 定数定義（必要最小限）
+const APP_CONSTANTS = {
+    DELAYS: {
+        RELOAD_DELAY: 1000  // ページリロードのみ保持
+    },
+    DEBOUNCE: {
+        ACTION_DELAY: 300,
+        RENDER_DELAY: 200
+    },
+    MESSAGE_TIMEOUTS: {
+        ERROR: 5000,
+        SUCCESS: 3000
+    }
+};
+
 // アプリケーション開始
 document.addEventListener('DOMContentLoaded', function() {
     const viewModel = new ChartViewModel();
@@ -28,10 +43,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 viewModel.isAuthenticated(true);
                 viewModel.userName(currentUser.name);
                 viewModel.userEmail(currentUser.email);
-
-                viewModel.loadCharts();
-                // Automatically create a new chart after login
-                viewModel.createNewChart();
                 viewModel.showSuccess('ログインしました');
             } else {
                 viewModel.showError('ログインに失敗しました: ' + (data.error || '不明なエラー'));
@@ -44,6 +55,11 @@ document.addEventListener('DOMContentLoaded', function() {
         .finally(() => {
             // ローディング終了
             viewModel.hideLoading();
+            
+            // 認証後の処理を実行（非同期）
+            if (viewModel.isAuthenticated()) {
+                viewModel.handlePostAuthSuccess();
+            }
         });
     };
 
@@ -72,7 +88,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 viewModel.showSuccess('ログアウトしました');
 
                 // ページをリロードして認証状態をリセット
-                setTimeout(() => location.reload(), 1000);
+                setTimeout(() => location.reload(), APP_CONSTANTS.DELAYS.RELOAD_DELAY);
             } else {
                 viewModel.showError('ログアウトに失敗しました');
             }
@@ -90,7 +106,7 @@ document.addEventListener('DOMContentLoaded', function() {
             viewModel.savedCharts([]);
             viewModel.currentChart(null);
 
-            setTimeout(() => location.reload(), 1000);
+            setTimeout(() => location.reload(), APP_CONSTANTS.DELAYS.RELOAD_DELAY);
         })
         .finally(() => {
             // ローディング終了
@@ -176,11 +192,9 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Google Sign-In setup failed:', error);
-                // フォールバック: 500ms後に再試行
-                setTimeout(() => {
-                    isGoogleSignInInitialized = false;
-                    initializeGoogleSignInImmediately();
-                }, 500);
+                // フォールバック: Promise.reject で適切にエラー処理
+                console.error('Google Sign-In initialization failed, not retrying to avoid infinite loops');
+                // 必要に応じて手動で再試行するか、ユーザーにページリロードを促す
             });
     }
 
@@ -194,12 +208,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // 即座に初期化を試行
         initializeGoogleSignInImmediately();
 
-        // フォールバック: 200ms後にもう一度試行（DOM準備が遅い場合）
-        setTimeout(() => {
-            if (!isGoogleSignInInitialized) {
-                initializeGoogleSignInImmediately();
-            }
-        }, 200);
+        // DOM準備完了の確認（DOMContentLoadedは既に完了しているため不要）
+        // 必要であればユーザーに手動でリロードを促すか、UI上でエラー表示
     }
 
     // DOMContentLoaded時に即座に実行
@@ -210,8 +220,15 @@ document.addEventListener('DOMContentLoaded', function() {
         optimizedGoogleSignInInit();
     }
 
-    // ウィンドウリサイズ時の再描画
+    // ウィンドウリサイズ時の再描画（デバウンス実装）
+    let resizeTimer = null;
     window.addEventListener('resize', function() {
-        setTimeout(() => viewModel.renderMermaid(), 200);
+        if (resizeTimer) {
+            clearTimeout(resizeTimer);
+        }
+        resizeTimer = setTimeout(() => {
+            viewModel.renderMermaid();
+            resizeTimer = null;
+        }, APP_CONSTANTS.DEBOUNCE.RENDER_DELAY);
     });
 });
