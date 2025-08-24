@@ -47,6 +47,11 @@ RUN mkdir -p /var/www/html/my_fuel_project && \
     cd /var/www/html/my_fuel_project && \
     (curl https://get.fuelphp.com/oil | sh || echo "Oil installation failed, continuing...")
 
+# プロジェクトファイルをコピーしてComposer依存関係をインストール
+WORKDIR /var/www/html/my_fuel_project
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --optimize-autoloader
+
 EXPOSE 80
 
 # Apacheをフォアグラウンドで起動
