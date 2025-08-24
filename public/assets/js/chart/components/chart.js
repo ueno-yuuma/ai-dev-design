@@ -49,7 +49,12 @@ const chartComponent = {
         this.currentChart(newChart);
         this.currentChartTitle(newChart.title);
         this.currentMermaidCode(newChart.content);
-        this.resetChangeTracking();
+        
+        // 新規チャートは未保存状態として設定
+        this.originalChartTitle(''); // 空の値を設定
+        this.originalMermaidCode(''); // 空の値を設定
+        this.hasUnsavedChanges(true); // 未保存状態に設定
+        
         this.addToHistory();
         this.renderMermaid();
         this.showSuccess('新しいチャートを作成しました');
