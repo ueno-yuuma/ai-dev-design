@@ -55,32 +55,42 @@ WORKDIR /var/www/html/my_fuel_project
 
 # Composerファイルをコピーして依存関係をインストール
 COPY composer.json composer.lock oil ./
+
+# アプリケーション用ディレクトリを事前に作成
+RUN mkdir -p fuel/app/logs fuel/app/database && \
+    chown -R www-data:www-data /var/www/html/my_fuel_project
+
+# www-dataユーザーでComposer installを実行
+USER www-data
 RUN curl -sS https://getcomposer.org/installer | php && \
     php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
 
-# プロジェクトファイルをすべてコピー
+# rootユーザーに戻してプロジェクトファイルをコピー
+USER root
 COPY . .
 
-# Composerを再実行（古いcomposer.pharが上書きされた場合の対応）
+# 再度www-dataユーザーでComposer installを実行（上書きされたcomposer.pharの対応）
+USER www-data
 RUN rm -f composer.phar && \
     curl -sS https://getcomposer.org/installer | php && \
     php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
 
+# rootユーザーに戻してその他の設定を実行
+USER root
+
 # SQLite拡張は上記でインストール済み
 
-# アプリケーション用ディレクトリの作成と権限設定
-RUN mkdir -p fuel/app/logs fuel/app/database && \
-    chown -R www-data:www-data fuel/vendor fuel/app/logs fuel/app/database && \
-    chmod -R 775 fuel/app/logs fuel/app/database
+# 権限設定の最終調整
+RUN chmod -R 775 fuel/app/logs fuel/app/database
 
 # データベースマイグレーションの実行
 RUN php oil refine migrate && \
     chown -R www-data:www-data fuel/app/database
 
-# 最終的な権限設定
-RUN chown -R www-data:www-data /var/www/html/my_fuel_project && \
+# 最終的な権限設定（必要な部分のみ）
+RUN chown -R www-data:www-data fuel/app/database && \
     chmod -R 755 /var/www/html/my_fuel_project && \
-    chmod -R 775 fuel/app/logs fuel/app/database fuel/vendor
+    chmod -R 775 fuel/app/logs fuel/app/database
 
 # Apacheとcronをフォアグラウンドで起動
 CMD ["apache2-foreground"]
