@@ -36,7 +36,25 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
    ```bash
    docker-compose up -d
    ```
-6. **ブラウザからlocalhostにアクセス**
+
+6. **初期セットアップコマンドの実行**
+   
+   コンテナ起動後、以下のコマンドを順番に実行してください：
+   
+   ```bash
+   # Composerで依存関係をインストール
+   docker exec --user www-data fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php composer.phar install --no-dev --optimize-autoloader --no-scripts"
+   
+   # データベースマイグレーションの実行（バージョン1から順番に）
+   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --version=1"
+   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --version=2"
+   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --version=3"
+   
+   # ログディレクトリの作成と権限設定
+   docker exec fuelphp-app bash -c "mkdir -p /var/www/html/my_fuel_project/fuel/app/logs && chown -R www-data:www-data /var/www/html/my_fuel_project/fuel/app/logs && chmod -R 755 /var/www/html/my_fuel_project/fuel/app/logs"
+   ```
+
+7. **ブラウザからlocalhostにアクセス**
 
 ## PHP周りのバージョン
 - **PHP**: 7.3
