@@ -60,23 +60,12 @@ COPY composer.json composer.lock oil ./
 RUN mkdir -p fuel/app/logs fuel/app/database && \
     chown -R www-data:www-data /var/www/html/my_fuel_project
 
-# www-dataユーザーでComposer installを実行
-USER www-data
-RUN curl -sS https://getcomposer.org/installer | php && \
-    php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
+# Composerのホームディレクトリを作成して権限を設定
+RUN mkdir -p /var/www/.composer && \
+    chown -R www-data:www-data /var/www/.composer
 
-# rootユーザーに戻してプロジェクトファイルをコピー
-USER root
+# プロジェクトファイルをコピー
 COPY . .
-
-# 再度www-dataユーザーでComposer installを実行（上書きされたcomposer.pharの対応）
-USER www-data
-RUN rm -f composer.phar && \
-    curl -sS https://getcomposer.org/installer | php && \
-    php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
-
-# rootユーザーに戻してその他の設定を実行
-USER root
 
 # SQLite拡張は上記でインストール済み
 
