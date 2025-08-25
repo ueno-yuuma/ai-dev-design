@@ -1,0 +1,170 @@
+<?php
+
+/**
+ * Chart Model
+ * 
+ * chartsテーブルにアクセスするためのモデル
+ */
+class Model_Chart extends \Orm\Model
+{
+  /**
+   * テーブル名
+   */
+  protected static $_table_name = 'charts';
+  
+  /**
+   * 主キー
+   */
+  protected static $_primary_key = array('id');
+  
+  /**
+   * プロパティ
+   */
+  protected static $_properties = array(
+    'id' => array(
+      'data_type' => 'int',
+      'label' => 'ID',
+    ),
+    'title' => array(
+      'data_type' => 'varchar',
+      'label' => 'タイトル',
+    ),
+    'user_id' => array(
+      'data_type' => 'int',
+      'label' => 'User ID',
+      'validation' => array('required'),
+    ),
+    'content' => array(
+      'data_type' => 'text',
+      'label' => 'Mermaidコード',
+    ),
+    'updated_at' => array(
+      'data_type' => 'timestamp',
+      'label' => '更新日時',
+    ),
+    'created_at' => array(
+      'data_type' => 'timestamp', 
+      'label' => '作成日時',
+    ),
+  );
+  
+  /**
+   * Userとの関係
+   */
+  protected static $_belongs_to = array(
+    'user' => array(
+      'key_from' => 'user_id',
+      'model_to' => 'Model_User',
+      'key_to' => 'id',
+    )
+  );
+  
+  /**
+   * 新しいチャートを作成
+   * 
+   * @param string $title チャートタイトル
+   * @param int $user_id User ID
+   * @param string $content Mermaidコード
+   * @return Model_Chart
+   */
+  public static function create_chart($title, $user_id, $content = '')
+  {
+    $chart = new static();
+    // idはAUTO_INCREMENTなので設定不要
+    $chart->title = $title;
+    $chart->user_id = $user_id;
+    $chart->content = $content;
+    $chart->created_at = date('Y-m-d H:i:s');
+    $chart->updated_at = date('Y-m-d H:i:s');
+    
+    $chart->save();
+    return $chart;
+  }
+  
+  /**
+   * ユーザーのチャート一覧を取得
+   * 
+   * @param string $user_id User ID
+   * @return array
+   */
+  public static function get_user_charts($user_id)
+  {
+    return \DB::select()
+      ->from(static::$_table_name)
+      ->where('user_id', $user_id)
+      ->order_by('updated_at', 'desc')
+      ->execute()
+      ->as_array();
+  }
+  
+  /**
+   * チャートを更新
+   * 
+   * @param string $title タイトル
+   * @param string $content Mermaidコード
+   */
+  public function update_chart($title = null, $content = null)
+  {
+    if ($title !== null) {
+      $this->title = $title;
+    }
+    if ($content !== null) {
+      $this->content = $content;
+    }
+    $this->updated_at = date('Y-m-d H:i:s');
+    
+    $this->save();
+  }
+  
+  /**
+   * データベース接続テスト用メソッド
+   * 
+   * @return bool
+   */
+  public static function test_connection()
+  {
+    try {
+      // MySQL connection test - check if we can query the chart table
+      $result = \DB::select(\DB::expr('COUNT(*) as count'))
+        ->from(static::$_table_name)
+        ->execute();
+      return true;
+    } catch (\Exception $e) {
+      \Log::error('Database connection test failed: ' . $e->getMessage());
+      return false;
+    }
+  }
+  
+  /**
+   * テーブル存在確認
+   * 
+   * @return bool
+   */
+  public static function table_exists()
+  {
+    try {
+      \DB::select()->from(static::$_table_name)->limit(1)->execute();
+      return true;
+    } catch (\Exception $e) {
+      \Log::error('Table existence check failed: ' . $e->getMessage());
+      return false;
+    }
+  }
+  
+  /**
+   * UUID生成
+   * 
+   * @return string
+   */
+  public static function generate_uuid()
+  {
+    return sprintf(
+      '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+      mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+      mt_rand(0, 0xffff),
+      mt_rand(0, 0x0fff) | 0x4000,
+      mt_rand(0, 0x3fff) | 0x8000,
+      mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+    );
+  }
+}

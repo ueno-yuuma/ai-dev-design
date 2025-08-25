@@ -17,26 +17,32 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
    cd docker
    ```
 
-3. **データベース名の設定**
-   `docker-compose.yml` 内の `db` サービスにある `MYSQL_DATABASE` の値を、各自任意のデータベース名に設定してください。
+3. **データベース設定確認**
+   このプロジェクトはMySQLデータベースを使用します。Docker Composeによって自動的にMySQLコンテナが起動され、データベースとユーザーが作成されます。
+
+4. **Dockerイメージのビルドとコンテナの起動**
+   ```bash
+   docker-compose up --build -d
+   ```
+
+5. **初期セットアップコマンドの実行**
    
-   例:
-   ```yaml
-   environment:
-     MYSQL_ROOT_PASSWORD: root
-     MYSQL_DATABASE: <your_database_name>  # 任意のデータベース名を指定
+   コンテナ起動後、以下のコマンドを順番に実行してください：
+   
+   ```bash
+   # Composerで依存関係をインストール
+   docker compose exec --user www-data app bash -c "cd /var/www/html/my_fuel_project && php composer.phar install --no-dev --optimize-autoloader --no-scripts"
+   
+   # データベースマイグレーションの実行
+   docker compose exec app php oil refine migrate --catchup
+   
+   # ログディレクトリの作成と権限設定
+   docker compose exec app bash -c "mkdir -p /var/www/html/my_fuel_project/fuel/app/logs && chown -R www-data:www-data /var/www/html/my_fuel_project/fuel/app/logs && chmod -R 755 /var/www/html/my_fuel_project/fuel/app/logs"
    ```
 
-4. **Dockerイメージのビルド**
-   ```bash
-   docker-compose build
-   ```
-
-5. **コンテナの起動**
-   ```bash
-   docker-compose up -d
-   ```
 6. **ブラウザからlocalhostにアクセス**
+   
+   セットアップ完了後、`http://localhost:8080` にアクセスしてアプリケーションを確認できます。
 
 ## PHP周りのバージョン
 - **PHP**: 7.3
@@ -48,18 +54,28 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
   - 年月日ごとにログが管理されている
   - tail -f {見たいログファイル}でログを出力
 
-## MySQLコンテナ設定
-このプロジェクトには、MySQLを使用するDBコンテナが含まれています。設定は以下の通りです。
+## データベース設定
+このプロジェクトではMySQLデータベースを使用しています。
 
-- **MySQLバージョン**: 8.0
-- **ポート**: `3306`
-- **環境変数**:
-  - `MYSQL_ROOT_PASSWORD`: root
-  - `MYSQL_DATABASE`: 各自設定したデータベース名
+- **データベース種別**: MySQL 8.0
+- **データベース名**: `ai_dev_design`
+- **ホスト**: `db:3306` (コンテナ内部)
+- **ユーザー**: `ai_dev_user`
+- **パスワード**: `ai_dev_password`
+- **テーブル**: users, charts, sessions
 
-### アクセス情報
-- **ホスト**: `localhost`
-- **ポート**: `3306`
-- **ユーザー名**: `root`
-- **パスワード**: `root`
-- **データベース名**: 各自設定した名前
+### 重要な注意点
+- MySQLコンテナが自動的にデータベースとユーザーを作成します
+- マイグレーションは手動実行が必要です（`docker compose exec app php oil refine migrate --catchup`）
+- データはDockerボリューム `mysql_data` に永続化されます
+
+## 📚 ドキュメント
+
+- **[API仕様書](./docs/api.yml)** - OpenAPI 3.0形式のREST API仕様
+- **[システム仕様書](./docs/specifications.md)** - 全体システム設計・要件
+- **[🔧 トラブルシューティング](./docs/troubleshooting/)** - 開発中の問題と解決策集
+
+### よく発生する問題
+- [FuelPHP REST Controller で401エラーが返されない](./docs/troubleshooting/fuelphp-rest-auth.md)
+- [SQLite ORM関連エラー (`Class 'Orm\Model' not found` など)](./docs/troubleshooting/sqlite-orm-setup.md)
+- [REST API設定エラー (CORS, JSON形式など)](./docs/troubleshooting/rest-api-best-practices.md)
