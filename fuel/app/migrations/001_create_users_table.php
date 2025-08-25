@@ -12,21 +12,15 @@ class Create_users_table
    */
   public function up()
   {
-    // SQLiteでusersテーブル作成
     \DB::query("
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE users (
         id TEXT PRIMARY KEY,
-        google_user_id TEXT NOT NULL UNIQUE,
-        email TEXT,
-        name TEXT,
-        created_at TEXT DEFAULT (datetime('now'))
+        google_user_id VARCHAR(255) NOT NULL UNIQUE,
+        email VARCHAR(255),
+        name VARCHAR(255),
+        created_at TEXT
       )
     ")->execute();
-    
-    // インデックス作成
-    \DB::query("CREATE INDEX IF NOT EXISTS idx_users_google_user_id ON users(google_user_id)")->execute();
-    
-    \Cli::write('Users table created successfully with SQLite.', 'green');
   }
   
   /**
@@ -35,6 +29,5 @@ class Create_users_table
   public function down()
   {
     \DB::query("DROP TABLE IF EXISTS users")->execute();
-    \Cli::write('Users table dropped successfully.', 'yellow');
   }
 }
