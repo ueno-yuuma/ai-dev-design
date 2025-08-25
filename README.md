@@ -17,15 +17,8 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
    cd docker
    ```
 
-3. **データベース名の設定**
-   `docker-compose.yml` 内の `db` サービスにある `MYSQL_DATABASE` の値を、各自任意のデータベース名に設定してください。
-   
-   例:
-   ```yaml
-   environment:
-     MYSQL_ROOT_PASSWORD: root
-     MYSQL_DATABASE: <your_database_name>  # 任意のデータベース名を指定
-   ```
+3. **データベース設定確認**
+   このプロジェクトはSQLiteデータベースを使用します。特別な設定は不要ですが、初期セットアップでマイグレーションコマンドを手動実行する必要があります。
 
 4. **Dockerイメージのビルド**
    ```bash
@@ -45,16 +38,19 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
    # Composerで依存関係をインストール
    docker exec --user www-data fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php composer.phar install --no-dev --optimize-autoloader --no-scripts"
    
-   # データベースマイグレーションの実行（バージョン1から順番に）
-   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --version=1"
-   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --version=2"
-   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --version=3"
+   # データベースマイグレーションの実行
+   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate"
    
    # ログディレクトリの作成と権限設定
    docker exec fuelphp-app bash -c "mkdir -p /var/www/html/my_fuel_project/fuel/app/logs && chown -R www-data:www-data /var/www/html/my_fuel_project/fuel/app/logs && chmod -R 755 /var/www/html/my_fuel_project/fuel/app/logs"
+   
+   # データベースファイルの権限設定
+   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && chown -R www-data:www-data fuel/app/database/ && chmod -R 775 fuel/app/database/"
    ```
 
 7. **ブラウザからlocalhostにアクセス**
+   
+   セットアップ完了後、`http://localhost:8080` にアクセスしてアプリケーションを確認できます。
 
 ## PHP周りのバージョン
 - **PHP**: 7.3
@@ -66,21 +62,18 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
   - 年月日ごとにログが管理されている
   - tail -f {見たいログファイル}でログを出力
 
-## MySQLコンテナ設定
-このプロジェクトには、MySQLを使用するDBコンテナが含まれています。設定は以下の通りです。
+## データベース設定
+このプロジェクトではSQLiteデータベースを使用しています。
 
-- **MySQLバージョン**: 8.0
-- **ポート**: `3306`
-- **環境変数**:
-  - `MYSQL_ROOT_PASSWORD`: root
-  - `MYSQL_DATABASE`: 各自設定したデータベース名
+- **データベース種別**: SQLite
+- **データベースファイル**: `fuel/app/database/test.db`
+- **作成方法**: マイグレーションコマンド実行時に自動作成
+- **テーブル**: users, charts, sessions
 
-### アクセス情報
-- **ホスト**: `localhost`
-- **ポート**: `3306`
-- **ユーザー名**: `root`
-- **パスワード**: `root`
-- **データベース名**: 各自設定した名前
+### 重要な注意点
+- データベースファイルへの書き込み権限が必要です
+- 上記セットアップコマンドで権限設定とマイグレーション実行を行ってください
+- マイグレーションは手動実行が必要です（`php oil refine migrate`）
 
 ## 📚 ドキュメント
 
