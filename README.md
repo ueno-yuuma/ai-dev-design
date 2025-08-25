@@ -39,7 +39,7 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
    docker exec --user www-data fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php composer.phar install --no-dev --optimize-autoloader --no-scripts"
    
    # データベースマイグレーションの実行
-   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate"
+   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --catchup"
    
    # ログディレクトリの作成と権限設定
    docker exec fuelphp-app bash -c "mkdir -p /var/www/html/my_fuel_project/fuel/app/logs && chown -R www-data:www-data /var/www/html/my_fuel_project/fuel/app/logs && chmod -R 755 /var/www/html/my_fuel_project/fuel/app/logs"
