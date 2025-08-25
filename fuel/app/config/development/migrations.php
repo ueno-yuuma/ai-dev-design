@@ -8,6 +8,7 @@ return array(
       array(
         0 => '001_create_users_table',
         1 => '002_create_charts_table',
+        2 => '003_create_sessions_table',
       ),
     ),
     'module' => 
@@ -19,4 +20,6 @@ return array(
   ),
   'folder' => 'migrations/',
   'table' => 'migration',
+  'flush_cache' => false,
+  'connection' => NULL,
 );

@@ -8,20 +8,27 @@ RUN apt-get update && \
     apt-get install -y \
     git \
     unzip \
-    curl \
     zlib1g-dev \
     libgmp-dev \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
     libpng-dev \
     libgd-dev \
+    cron \
+    vim \
     libonig-dev \
     libzip-dev \
-    sqlite3 \
-    libsqlite3-dev && \
+    libsqlite3-dev \
+    locales && \
     ln -s /usr/include/x86_64-linux-gnu/gmp.h /usr/include/gmp.h && \
     docker-php-ext-configure gd --with-freetype-dir --with-jpeg-dir && \
-    docker-php-ext-install mbstring pdo_mysql pdo_sqlite mysqli zip gd gmp bcmath
+    docker-php-ext-install mbstring pdo_mysql mysqli zip gd gmp bcmath pdo_sqlite
+
+# 日本語ロケールの生成
+RUN locale-gen ja_JP.UTF-8 && \
+    echo "LANG=ja_JP.UTF-8" > /etc/default/locale && \
+    echo "LANGUAGE=ja_JP:ja" >> /etc/default/locale && \
+    echo "LC_ALL=ja_JP.UTF-8" >> /etc/default/locale
 
 # Apacheのユーザーとグループの権限を更新
 RUN usermod -u 1000 www-data && groupmod -g 1000 www-data
@@ -29,25 +36,50 @@ RUN usermod -u 1000 www-data && groupmod -g 1000 www-data
 # Apacheモジュールを有効化
 RUN a2enmod rewrite headers
 
-# Apache設定ファイルをコピーし、環境変数を設定
-COPY docker/apache-config.conf /etc/apache2/sites-available/000-default.conf
-RUN sed -i '/<\/VirtualHost>/i\    SetEnv FUEL_ENV development' /etc/apache2/sites-available/000-default.conf
+# DocumentRootを変更し、環境変数を設定
+RUN DEFAULT_SITE_FILE=/etc/apache2/sites-enabled/000-default.conf && \
+    TMP=$(mktemp) && \
+    sed 's!/var/www/html!/var/www/html/my_fuel_project/public!' $DEFAULT_SITE_FILE > $TMP && \
+    echo SetEnv FUEL_ENV development >> $TMP && \
+    mv $TMP $DEFAULT_SITE_FILE
 
-# FuelPHPのログディレクトリとキャッシュディレクトリを作成し、安全な権限を設定
-RUN mkdir -p /var/log/fuel /var/cache/fuel && \
-    chown -R www-data:www-data /var/log/fuel /var/cache/fuel && \
-    chmod 755 /var/log/fuel /var/cache/fuel
+# FuelPHPのログディレクトリとキャッシュディレクトリを作成し、権限を設定
+RUN mkdir /var/log/fuel /var/cache/fuel && \
+    chmod 777 /var/log/fuel /var/cache/fuel
 
-# Composerをインストール
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Composerをセットアップ
 ENV COMPOSER_ALLOW_SUPERUSER 1
 
-# Oilをインストール（エラーハンドリング付き）
-RUN mkdir -p /var/www/html/my_fuel_project && \
-    cd /var/www/html/my_fuel_project && \
-    (curl https://get.fuelphp.com/oil | sh || echo "Oil installation failed, continuing...")
+# FuelPHPプロジェクトセットアップ
+WORKDIR /var/www/html/my_fuel_project
 
-EXPOSE 80
+# Composerファイルをコピーして依存関係をインストール
+COPY composer.json composer.lock oil ./
 
-# Apacheをフォアグラウンドで起動
+# アプリケーション用ディレクトリを事前に作成
+RUN mkdir -p fuel/app/logs fuel/app/database && \
+    chown -R www-data:www-data /var/www/html/my_fuel_project
+
+# Composerのホームディレクトリを作成して権限を設定
+RUN mkdir -p /var/www/.composer && \
+    chown -R www-data:www-data /var/www/.composer
+
+# プロジェクトファイルをコピー
+COPY . .
+
+# SQLite拡張は上記でインストール済み
+
+# 権限設定の最終調整
+RUN chmod -R 775 fuel/app/logs fuel/app/database
+
+# データベースマイグレーションの実行
+RUN php oil refine migrate && \
+    chown -R www-data:www-data fuel/app/database
+
+# 最終的な権限設定（必要な部分のみ）
+RUN chown -R www-data:www-data fuel/app/database && \
+    chmod -R 755 /var/www/html/my_fuel_project && \
+    chmod -R 775 fuel/app/logs fuel/app/database
+
+# Apacheとcronをフォアグラウンドで起動
 CMD ["apache2-foreground"]

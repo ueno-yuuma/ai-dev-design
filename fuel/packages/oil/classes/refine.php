@@ -1,15 +1,13 @@
 <?php
 /**
- * Fuel
- *
- * Fuel is a fast, lightweight, community driven PHP5 framework.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
  *
  * @package    Fuel
- * @version    1.8
+ * @version    1.8.2
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2016 Fuel Development Team
- * @link       http://fuelphp.com
+ * @copyright  2010 - 2019 Fuel Development Team
+ * @link       https://fuelphp.com
  */
 
 namespace Oil;
@@ -162,12 +160,12 @@ Usage:
     php oil [r|refine] <taskname>
 
 Description:
-    Tasks are classes that can be run through the the command line or set up as a cron job.
+    Tasks are classes that can be run through the command line or set up as a cron job.
 
 Available tasks:
 $output_available_tasks
 Documentation:
-    http://docs.fuelphp.com/packages/oil/refine.html
+    https://docs.fuelphp.com/packages/oil/refine.html
 HELP;
 		\Cli::write($output);
 

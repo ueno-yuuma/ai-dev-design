@@ -1,6 +1,5 @@
 # Composer dependencies
 /vendor/
-/composer.phar
 
 # Log and cache files
 /fuel/app/logs/

@@ -1,15 +1,13 @@
 <?php
 /**
- * Fuel
- *
- * Fuel is a fast, lightweight, community driven PHP5 framework.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
  *
  * @package    Fuel
- * @version    1.8
+ * @version    1.8.2
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2016 Fuel Development Team
- * @link       http://fuelphp.com
+ * @copyright  2010 - 2019 Fuel Development Team
+ * @link       https://fuelphp.com
  */
 
 namespace Oil;
@@ -60,7 +58,7 @@ Examples:
   php oil console
 
 Documentation:
-  http://fuelphp.com/docs/packages/oil/console.html
+  https://fuelphp.com/docs/packages/oil/console.html
 HELP;
 		\Cli::write($output);
 
@@ -136,11 +134,11 @@ HELP;
 				}
 				elseif (is_string($ret))
 				{
-					echo addcslashes($ret, "\0..\37\177..\377");
+					echo addcslashes($ret, "\0..\11\13\14\16..\37\177..\377");
 				}
 				elseif ( ! is_null($ret))
 				{
-					var_export($ret);
+					print_r($ret);
 				}
 			}
 
@@ -201,7 +199,7 @@ HELP;
 			return false;
 		}
 
-		$kw = preg_split("[^a-z0-9_]i", $code);
+		$kw = preg_split("/[^a-z0-9_]/i", $code);
 		foreach ($kw as $i)
 		{
 			if (in_array($i, $skip))
