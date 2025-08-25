@@ -18,10 +18,11 @@ RUN apt-get update && \
     vim \
     libonig-dev \
     libzip-dev \
+    libsqlite3-dev \
     locales && \
     ln -s /usr/include/x86_64-linux-gnu/gmp.h /usr/include/gmp.h && \
     docker-php-ext-configure gd --with-freetype-dir --with-jpeg-dir && \
-    docker-php-ext-install mbstring pdo_mysql mysqli zip gd gmp bcmath
+    docker-php-ext-install mbstring pdo_mysql mysqli zip gd gmp bcmath pdo_sqlite
 
 # 日本語ロケールの生成
 RUN locale-gen ja_JP.UTF-8 && \
@@ -65,8 +66,7 @@ RUN rm -f composer.phar && \
     curl -sS https://getcomposer.org/installer | php && \
     php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
 
-# SQLite拡張が必要な場合はインストール
-RUN docker-php-ext-install pdo_sqlite
+# SQLite拡張は上記でインストール済み
 
 # アプリケーション用ディレクトリの作成と権限設定
 RUN mkdir -p fuel/app/logs fuel/app/database && \
