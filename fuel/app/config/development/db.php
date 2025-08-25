@@ -2,23 +2,23 @@
 /**
  * The development database settings. These get merged with the global settings.
  * 
- * このプロジェクトはSQLiteデータベースを使用します。
- * データベースファイル: fuel/app/database/test.db
+ * このプロジェクトはMySQLデータベースを使用します。
+ * データベース: ai_dev_design
  */
 
 return array(
-	// SQLiteデータベース設定（メイン使用）
+	// MySQLデータベース設定（メイン使用）
 	'default' => array(
 		'type'        => 'pdo',
 		'connection'  => array(
-			'dsn'        => 'sqlite:' . APPPATH . 'database/test.db',
-			'username'   => '',
-			'password'   => '',
+			'dsn'        => 'mysql:host=db;dbname=ai_dev_design;charset=utf8mb4',
+			'username'   => 'ai_dev_user',
+			'password'   => 'ai_dev_password',
 			'persistent' => false,
 		),
-		'identifier'   => '"',
+		'identifier'   => '`',
 		'table_prefix' => '',
-		'charset'      => null, // SQLiteではcharsetをnullに設定
+		'charset'      => 'utf8mb4',
 		'enable_cache' => true,
 		'profiling'    => false,
 	),
