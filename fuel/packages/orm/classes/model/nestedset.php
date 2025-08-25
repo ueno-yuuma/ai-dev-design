@@ -1,15 +1,13 @@
 <?php
 /**
- * Fuel
- *
- * Fuel is a fast, lightweight, community driven PHP5 framework.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
  *
  * @package    Fuel
- * @version    1.8
+ * @version    1.8.2
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2016 Fuel Development Team
- * @link       http://fuelphp.com
+ * @copyright  2010 - 2019 Fuel Development Team
+ * @link       https://fuelphp.com
  */
 
 namespace Orm;
@@ -18,7 +16,7 @@ namespace Orm;
  * Implements NestedSets (http://en.wikipedia.org/wiki/Nested_set_model)
  *
  * Some design ideas borrowed from https://github.com/hubspace/fuel-nestedset
- * (see http://fuelphp.com/forums/discussion/12206/fuel-nested-sets)
+ * (see https://fuelphp.com/forums/discussion/12206/fuel-nested-sets)
  */
 class Model_Nestedset extends Model
 {
@@ -1029,23 +1027,27 @@ class Model_Nestedset extends Model
 					->from(static::table())
 					->where($left_field, '=', 1);
 
-				// multi-root tree? And no new tree id defined?
-				if ( ! is_null($tree_field) and empty($this->{$tree_field}))
+				// multi-root tree?
+				if ( ! is_null($tree_field))
 				{
-					// get the next free tree id, and hope it's numeric...
-					$this->_data[$tree_field] = $this->max($tree_field) + 1;
+					// and no new tree id defined?
+					if (empty($this->{$tree_field}))
+					{
+						// check if there is a tree-id set
+						if (is_null($this->_current_tree_id))
+						{
+							// nope, generate the next free tree id (hope the column is numeric)...
+							$this->_current_tree_id = $this->max($tree_field) + 1;
+						}
 
-					// and set it as the default tree id for this node
-					$this->set_tree_id($this->_data[$tree_field]);
-				}
+						// set the tree id explicitly
+						$this->_data[$tree_field] = $this->_current_tree_id;
+					}
 
-				// add the tree_id to the query if present
-				if ( ! empty($this->{$tree_field}))
-				{
+					// add the tree_id to the query
 					$query->where($tree_field, '=', $this->_data[$tree_field]);
 				}
 
-				// run the check
 				$result = $query->execute(static::connection());
 
 				// any hits?
@@ -1496,12 +1498,11 @@ class Model_Nestedset extends Model
 					$query = \DB::select('child.'.$pk)
 						->from(array(static::table(), 'child'))
 						->join(array(static::table(), 'ancestor'), 'left')
-						->on(\DB::identifier('ancestor.' . $left_field), 'BETWEEN', \DB::expr(($left + 1) . ' AND ' . ($right - 1) . ' AND '.\DB::identifier('ancestor.'.$tree_field).' = '.$this->get_tree_id()))
+						->on(\DB::identifier('ancestor.' . $left_field), 'BETWEEN', \DB::expr(($left + 1) . ' AND ' . ($right - 1) . ' AND '.\DB::identifier('ancestor.'.$tree_field).' = '.\DB::quote($this->get_tree_id())))
 						->on(\DB::identifier('child.' . $left_field), 'BETWEEN', \DB::expr(\DB::identifier('ancestor.'.$left_field).' + 1 AND '.\DB::identifier('ancestor.'.$right_field).' - 1'))
 						->where(\DB::identifier('child.' . $left_field), 'BETWEEN', \DB::expr(($left + 1) . ' AND ' . ($right - 1)))
 						->and_where('ancestor.'.$pk, null)
 						->and_where('child.'.$tree_field, '=', $this->get_tree_id());
-
 				}
 
 				// extract the PK's, and bail out if no children found

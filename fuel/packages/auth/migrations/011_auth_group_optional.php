@@ -14,7 +14,7 @@ namespace Fuel\Migrations;
 
 include __DIR__."/../normalizedrivertypes.php";
 
-class Auth_Add_Authactions
+class Auth_Group_Optional
 {
 	function up()
 	{
@@ -30,18 +30,9 @@ class Auth_Add_Authactions
 			// make sure the correct connection is used
 			$this->dbconnection('ormauth');
 
-			// add the actions field to the permission and permission through tables
-			\DBUtil::add_fields($table.'_permissions', array(
-				'actions' => array('type' => 'text', 'null' => true, 'after' => 'description'),
-			));
-			\DBUtil::add_fields($table.'_user_permissions', array(
-				'actions' => array('type' => 'text', 'null' => true, 'after' => 'perms_id'),
-			));
-			\DBUtil::add_fields($table.'_group_permissions', array(
-				'actions' => array('type' => 'text', 'null' => true, 'after' => 'perms_id'),
-			));
-			\DBUtil::add_fields($table.'_role_permissions', array(
-				'actions' => array('type' => 'text', 'null' => true, 'after' => 'perms_id'),
+			// make the group_id optional
+			\DBUtil::modify_fields($table, array(
+				'group_id' => array('type' => 'int', 'constraint' => 11, 'null' => true, 'default' => null),
 			));
 		}
 
@@ -63,17 +54,9 @@ class Auth_Add_Authactions
 			// make sure the correct connection is used
 			$this->dbconnection('ormauth');
 
-			\DBUtil::drop_fields($table.'_permissions', array(
-				'actions',
-			));
-			\DBUtil::drop_fields($table.'_user_permissions', array(
-				'actions',
-			));
-			\DBUtil::drop_fields($table.'_group_permissions', array(
-				'actions',
-			));
-			\DBUtil::drop_fields($table.'_role_permissions', array(
-				'actions',
+			// make the group_id optional
+			\DBUtil::modify_fields($table, array(
+				'group_id' => array('type' => 'int', 'constraint' => 11, 'null' => true, 'default' => null),
 			));
 		}
 

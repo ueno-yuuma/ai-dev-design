@@ -1,15 +1,13 @@
 <?php
 /**
- * Fuel
- *
- * Fuel is a fast, lightweight, community driven PHP5 framework.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
  *
  * @package    Fuel
- * @version    1.8
+ * @version    1.8.2
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2016 Fuel Development Team
- * @link       http://fuelphp.com
+ * @copyright  2010 - 2019 Fuel Development Team
+ * @link       https://fuelphp.com
  */
 
 namespace Oil;
@@ -125,7 +123,7 @@ Examples:
   php oil package uninstall <packagename>
 
 Documentation:
-  http://fuelphp.com/docs/packages/oil/package.html
+  https://fuelphp.com/docs/packages/oil/package.html
 HELP;
 		\Cli::write($output);
 

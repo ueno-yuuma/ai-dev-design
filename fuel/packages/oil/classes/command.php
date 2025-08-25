@@ -1,15 +1,13 @@
 <?php
 /**
- * Fuel
- *
- * Fuel is a fast, lightweight, community driven PHP5 framework.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
  *
  * @package    Fuel
- * @version    1.8
+ * @version    1.8.2
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2016 Fuel Development Team
- * @link       http://fuelphp.com
+ * @copyright  2010 - 2019 Fuel Development Team
+ * @link       https://fuelphp.com
  */
 
 namespace Oil;
@@ -127,35 +125,6 @@ class Command
 
 				break;
 
-				case 'cell':
-				case 'cells':
-
-					$action = isset($args[2]) ? $args[2] : 'help';
-
-					switch ($action)
-					{
-						case 'list':
-							call_user_func('Oil\Cell::all');
-						break;
-
-						case 'search':
-						case 'install':
-						case 'upgrade':
-						case 'uninstall':
-							call_fuel_func_array('Oil\Cell::'.$action, array_slice($args, 3));
-						break;
-
-						case 'info':
-						case 'details':
-							call_fuel_func_array('Oil\Cell::info', array_slice($args, 3));
-						break;
-
-						default:
-							Cell::help();
-					}
-
-				break;
-
 				case 't':
 				case 'test':
 
@@ -185,7 +154,7 @@ Examples:
   php oil test
 
 Documentation:
-  http://fuelphp.com/docs/packages/oil/test.html
+  https://fuelphp.com/docs/packages/oil/test.html
 HELP;
 		\Cli::write($output);
 					}
@@ -217,7 +186,7 @@ HELP;
 						// Attempt to load PHUnit.  If it fails, we are done.
 						if ( ! $is_phar and ! class_exists('PHPUnit_Framework_TestCase'))
 						{
-							throw new Exception('PHPUnit does not appear to be installed.'.PHP_EOL.PHP_EOL."\tPlease visit http://phpunit.de and install.");
+							throw new Exception('PHPUnit does not appear to be installed.'.PHP_EOL.PHP_EOL."\tPlease visit https://phpunit.de and install.");
 						}
 
 						// Check for a custom phpunit config, but default to the one from core
@@ -236,7 +205,7 @@ HELP;
 						// Respect the group options
 						\Cli::option('group') and $command .= ' --group '.\Cli::option('group');
 						\Cli::option('exclude-group') and $command .= ' --exclude-group '.\Cli::option('exclude-group');
-						
+
 						// Respect the testsuite options
 						\Cli::option('testsuite') and $command .= ' --testsuite '.\Cli::option('testsuite');
 
@@ -289,7 +258,7 @@ Examples:
   php oil server -p=8080
 
 Documentation:
-  http://fuelphp.com/docs/packages/oil/server.html
+  https://fuelphp.com/docs/packages/oil/server.html
 HELP;
 		\Cli::write($output);
 					}
@@ -333,7 +302,12 @@ HELP;
 
 	protected static function print_exception(\Exception $ex)
 	{
-		\Cli::error('Uncaught exception '.get_class($ex).': '.$ex->getMessage());
+		// create the error message, log and display it
+		$msg = $ex->getCode().' - '.$ex->getMessage().' in '.$ex->getFile().' on line '.$ex->getLine();
+		logger(\Fuel::L_ERROR, $msg);
+		\Cli::error('Uncaught exception '.get_class($ex).': '.$msg);
+
+		// print a trace if not in production, don't want to spoil external logging
 		if (\Fuel::$env != \Fuel::PRODUCTION)
 		{
 			\Cli::error('Callstack: ');
@@ -342,6 +316,7 @@ HELP;
 		\Cli::beep();
 		\Cli::option('speak') and `say --voice="Trinoids" "{$ex->getMessage()}"`;
 
+		// print any previous exception(s) too...
 		if (($previous = $ex->getPrevious()) != null)
 		{
 			\Cli::error('');
@@ -355,7 +330,7 @@ HELP;
 		echo <<<HELP
 
 Usage:
-  php oil [cell|console|generate|package|refine|help|server|test]
+  php oil [console|generate|package|refine|help|server|test]
 
 Runtime options:
   -f, [--force]    # Overwrite files that already exist
@@ -376,7 +351,7 @@ More information:
   about that specific command: php oil package help
 
 Documentation:
-  http://docs.fuelphp.com/packages/oil/intro.html
+  https://docs.fuelphp.com/packages/oil/intro.html
 
 HELP;
 

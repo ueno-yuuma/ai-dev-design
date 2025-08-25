@@ -1,15 +1,13 @@
 <?php
 /**
- * Fuel
- *
- * Fuel is a fast, lightweight, community driven PHP5 framework.
+ * Fuel is a fast, lightweight, community driven PHP 5.4+ framework.
  *
  * @package    Fuel
- * @version    1.8
+ * @version    1.8.2
  * @author     Fuel Development Team
  * @license    MIT License
- * @copyright  2010 - 2016 Fuel Development Team
- * @link       http://fuelphp.com
+ * @copyright  2010 - 2019 Fuel Development Team
+ * @link       https://fuelphp.com
  */
 
 namespace Orm;
@@ -59,12 +57,7 @@ class HasOne extends Relation
 		}
 
 		$conditions = \Arr::merge($this->conditions, $conditions);
-
-		foreach (\Arr::get($conditions, 'where', array()) as $key => $condition)
-		{
-			is_array($condition) or $condition = array($key, '=', $condition);
-			$query->where($condition);
-		}
+		$query->_parse_where_array(\Arr::get($conditions, 'where', array()));
 
 		return $query->get_one();
 	}
@@ -100,6 +93,10 @@ class HasOne extends Relation
 				if ( ! $condition[0] instanceof \Fuel\Core\Database_Expression and strpos($condition[0], '.') === false)
 				{
 					$condition[0] = $alias_to.'.'.$condition[0];
+				}
+				if (count($condition) == 2) // From Query::_where()
+				{
+					$condition = array($condition[0], '=', $condition[1]);
 				}
 				is_string($condition[2]) and $condition[2] = \Db::quote($condition[2], $model['connection']);
 
