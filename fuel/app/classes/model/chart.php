@@ -22,7 +22,7 @@ class Model_Chart extends \Orm\Model
    */
   protected static $_properties = array(
     'id' => array(
-      'data_type' => 'varchar',
+      'data_type' => 'int',
       'label' => 'ID',
     ),
     'title' => array(
@@ -30,7 +30,7 @@ class Model_Chart extends \Orm\Model
       'label' => 'タイトル',
     ),
     'user_id' => array(
-      'data_type' => 'varchar',
+      'data_type' => 'int',
       'label' => 'User ID',
       'validation' => array('required'),
     ),
@@ -39,11 +39,11 @@ class Model_Chart extends \Orm\Model
       'label' => 'Mermaidコード',
     ),
     'updated_at' => array(
-      'data_type' => 'varchar',
+      'data_type' => 'timestamp',
       'label' => '更新日時',
     ),
     'created_at' => array(
-      'data_type' => 'varchar', 
+      'data_type' => 'timestamp', 
       'label' => '作成日時',
     ),
   );
@@ -63,14 +63,14 @@ class Model_Chart extends \Orm\Model
    * 新しいチャートを作成
    * 
    * @param string $title チャートタイトル
-   * @param string $user_id User ID
+   * @param int $user_id User ID
    * @param string $content Mermaidコード
    * @return Model_Chart
    */
   public static function create_chart($title, $user_id, $content = '')
   {
     $chart = new static();
-    $chart->id = static::generate_uuid();
+    // idはAUTO_INCREMENTなので設定不要
     $chart->title = $title;
     $chart->user_id = $user_id;
     $chart->content = $content;
@@ -124,7 +124,7 @@ class Model_Chart extends \Orm\Model
   public static function test_connection()
   {
     try {
-      // SQLite specific test - check if we can query the chart table
+      // MySQL connection test - check if we can query the chart table
       $result = \DB::select(\DB::expr('COUNT(*) as count'))
         ->from(static::$_table_name)
         ->execute();

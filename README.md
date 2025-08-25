@@ -18,37 +18,29 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
    ```
 
 3. **データベース設定確認**
-   このプロジェクトはSQLiteデータベースを使用します。特別な設定は不要ですが、初期セットアップでマイグレーションコマンドを手動実行する必要があります。
+   このプロジェクトはMySQLデータベースを使用します。Docker Composeによって自動的にMySQLコンテナが起動され、データベースとユーザーが作成されます。
 
-4. **Dockerイメージのビルド**
+4. **Dockerイメージのビルドとコンテナの起動**
    ```bash
-   docker-compose build
+   docker-compose up --build -d
    ```
 
-5. **コンテナの起動**
-   ```bash
-   docker-compose up -d
-   ```
-
-6. **初期セットアップコマンドの実行**
+5. **初期セットアップコマンドの実行**
    
    コンテナ起動後、以下のコマンドを順番に実行してください：
    
    ```bash
    # Composerで依存関係をインストール
-   docker exec --user www-data fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php composer.phar install --no-dev --optimize-autoloader --no-scripts"
+   docker compose exec --user www-data app bash -c "cd /var/www/html/my_fuel_project && php composer.phar install --no-dev --optimize-autoloader --no-scripts"
    
    # データベースマイグレーションの実行
-   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && php oil refine migrate --catchup"
+   docker compose exec app php oil refine migrate --catchup
    
    # ログディレクトリの作成と権限設定
-   docker exec fuelphp-app bash -c "mkdir -p /var/www/html/my_fuel_project/fuel/app/logs && chown -R www-data:www-data /var/www/html/my_fuel_project/fuel/app/logs && chmod -R 755 /var/www/html/my_fuel_project/fuel/app/logs"
-   
-   # データベースファイルの権限設定
-   docker exec fuelphp-app bash -c "cd /var/www/html/my_fuel_project && chown -R www-data:www-data fuel/app/database/ && chmod -R 775 fuel/app/database/"
+   docker compose exec app bash -c "mkdir -p /var/www/html/my_fuel_project/fuel/app/logs && chown -R www-data:www-data /var/www/html/my_fuel_project/fuel/app/logs && chmod -R 755 /var/www/html/my_fuel_project/fuel/app/logs"
    ```
 
-7. **ブラウザからlocalhostにアクセス**
+6. **ブラウザからlocalhostにアクセス**
    
    セットアップ完了後、`http://localhost:8080` にアクセスしてアプリケーションを確認できます。
 
@@ -63,17 +55,19 @@ Dockerの基本的な概念については、以下のリンクを参考にし�
   - tail -f {見たいログファイル}でログを出力
 
 ## データベース設定
-このプロジェクトではSQLiteデータベースを使用しています。
+このプロジェクトではMySQLデータベースを使用しています。
 
-- **データベース種別**: SQLite
-- **データベースファイル**: `fuel/app/database/test.db`
-- **作成方法**: マイグレーションコマンド実行時に自動作成
+- **データベース種別**: MySQL 8.0
+- **データベース名**: `ai_dev_design`
+- **ホスト**: `db:3306` (コンテナ内部)
+- **ユーザー**: `ai_dev_user`
+- **パスワード**: `ai_dev_password`
 - **テーブル**: users, charts, sessions
 
 ### 重要な注意点
-- データベースファイルへの書き込み権限が必要です
-- 上記セットアップコマンドで権限設定とマイグレーション実行を行ってください
-- マイグレーションは手動実行が必要です（`php oil refine migrate`）
+- MySQLコンテナが自動的にデータベースとユーザーを作成します
+- マイグレーションは手動実行が必要です（`docker compose exec app php oil refine migrate --catchup`）
+- データはDockerボリューム `mysql_data` に永続化されます
 
 ## 📚 ドキュメント
 

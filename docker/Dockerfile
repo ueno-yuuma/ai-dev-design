@@ -72,9 +72,9 @@ COPY . .
 # 権限設定の最終調整
 RUN chmod -R 775 fuel/app/logs fuel/app/database
 
-# データベースマイグレーションの実行
-RUN php oil refine migrate && \
-    chown -R www-data:www-data fuel/app/database
+# データベースマイグレーションの実行（後で手動実行）
+# RUN php oil refine migrate && \
+#     chown -R www-data:www-data fuel/app/database
 
 # 最終的な権限設定（必要な部分のみ）
 RUN chown -R www-data:www-data fuel/app/database && \
