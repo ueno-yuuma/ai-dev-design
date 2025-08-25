@@ -49,19 +49,38 @@ RUN mkdir /var/log/fuel /var/cache/fuel && \
 # Composerをセットアップ
 ENV COMPOSER_ALLOW_SUPERUSER 1
 
-# Oilをインストール
-RUN mkdir /var/www/html/my_fuel_project && \
-    cd /var/www/html/my_fuel_project && \
-    curl https://get.fuelphp.com/oil | sh
-
-# プロジェクトファイルをコピーしてComposer依存関係をインストール
+# FuelPHPプロジェクトセットアップ
 WORKDIR /var/www/html/my_fuel_project
-COPY composer.json composer.lock composer.phar ./
-RUN php composer.phar install --no-dev --optimize-autoloader
-COPY . .
-RUN chown -R www-data:www-data /var/www/html/my_fuel_project
 
-EXPOSE 80
+# Composerファイルをコピーして依存関係をインストール
+COPY composer.json composer.lock oil ./
+RUN curl -sS https://getcomposer.org/installer | php && \
+    php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
+
+# プロジェクトファイルをすべてコピー
+COPY . .
+
+# Composerを再実行（古いcomposer.pharが上書きされた場合の対応）
+RUN rm -f composer.phar && \
+    curl -sS https://getcomposer.org/installer | php && \
+    php composer.phar install --no-dev --optimize-autoloader --ignore-platform-reqs --no-scripts
+
+# SQLite拡張が必要な場合はインストール
+RUN docker-php-ext-install pdo_sqlite
+
+# アプリケーション用ディレクトリの作成と権限設定
+RUN mkdir -p fuel/app/logs fuel/app/database && \
+    chown -R www-data:www-data fuel/vendor fuel/app/logs fuel/app/database && \
+    chmod -R 775 fuel/app/logs fuel/app/database
+
+# データベースマイグレーションの実行
+RUN php oil refine migrate && \
+    chown -R www-data:www-data fuel/app/database
+
+# 最終的な権限設定
+RUN chown -R www-data:www-data /var/www/html/my_fuel_project && \
+    chmod -R 755 /var/www/html/my_fuel_project && \
+    chmod -R 775 fuel/app/logs fuel/app/database fuel/vendor
 
 # Apacheとcronをフォアグラウンドで起動
 CMD ["apache2-foreground"]
