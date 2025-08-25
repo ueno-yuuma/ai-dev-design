@@ -22,7 +22,7 @@ class Model_User extends \Orm\Model
    */
   protected static $_properties = array(
     'id' => array(
-      'data_type' => 'varchar',
+      'data_type' => 'int',
       'label' => 'ID',
     ),
     'google_user_id' => array(
@@ -39,7 +39,7 @@ class Model_User extends \Orm\Model
       'label' => 'Name',
     ),
     'created_at' => array(
-      'data_type' => 'varchar',
+      'data_type' => 'timestamp',
       'label' => '作成日時',
     ),
   );
@@ -91,7 +91,7 @@ class Model_User extends \Orm\Model
     
     // 新規ユーザーを作成
     $user = new static();
-    $user->id = static::generate_uuid();
+    // idはAUTO_INCREMENTなので設定不要
     $user->google_user_id = $google_user_id;
     $user->email = $email;
     $user->name = $name;

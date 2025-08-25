@@ -12,3 +12,25 @@ services:
       - ../.env
     environment:
       - FUEL_ENV=development
+    depends_on:
+      - db
+
+  db:
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    container_name: mysql-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ai_dev_design
+      MYSQL_USER: ai_dev_user
+      MYSQL_PASSWORD: ai_dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./db/my.cnf:/etc/mysql/conf.d/my.cnf
+    command: --default-authentication-plugin=mysql_native_password
+
+volumes:
+  mysql_data:

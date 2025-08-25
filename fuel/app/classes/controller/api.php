@@ -401,8 +401,9 @@ class Controller_Api extends Controller_Rest
             'status' => 'healthy',
             'timestamp' => date('Y-m-d H:i:s'),
             'database' => $db_status,
-            'database_type' => 'SQLite',
-            'database_path' => APPPATH . 'database/test.db'
+            'database_type' => 'MySQL',
+            'database_host' => 'db:3306',
+            'database_name' => 'ai_dev_design'
         ));
     }
     

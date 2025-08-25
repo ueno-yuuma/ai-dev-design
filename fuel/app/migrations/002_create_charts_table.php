@@ -3,7 +3,7 @@
 namespace Fuel\Migrations;
 
 /**
- * Chartsテーブル作成マイグレーション (SQLite用)
+ * Chartsテーブル作成マイグレーション (MySQL用)
  */
 class Create_charts_table
 {
@@ -14,14 +14,14 @@ class Create_charts_table
   {
     \DB::query("
       CREATE TABLE charts (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
         title VARCHAR(255),
-        content TEXT,
-        created_at TEXT,
-        updated_at TEXT,
+        content LONGTEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      )
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ")->execute();
   }
   

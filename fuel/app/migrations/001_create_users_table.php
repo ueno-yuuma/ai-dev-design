@@ -3,7 +3,7 @@
 namespace Fuel\Migrations;
 
 /**
- * Usersテーブル作成マイグレーション (SQLite用)
+ * Usersテーブル作成マイグレーション (MySQL用)
  */
 class Create_users_table
 {
@@ -14,12 +14,12 @@ class Create_users_table
   {
     \DB::query("
       CREATE TABLE users (
-        id TEXT PRIMARY KEY,
+        id INT AUTO_INCREMENT PRIMARY KEY,
         google_user_id VARCHAR(255) NOT NULL UNIQUE,
         email VARCHAR(255),
         name VARCHAR(255),
-        created_at TEXT
-      )
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ")->execute();
   }
   
